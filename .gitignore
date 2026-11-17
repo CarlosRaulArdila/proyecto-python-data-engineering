@@ -1,0 +1,15 @@
+
+# Credenciales
+.env
+
+# Entornos Python
+.venv/
+__pycache__/
+*.pyc
+
+# Archivos temporales
+.ipynb_checkpoints/
+
+# Datos y archivos generados
+data/
+logs/
