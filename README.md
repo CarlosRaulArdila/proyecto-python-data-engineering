@@ -1,4 +1,3 @@
-
 # Hospital Data Engineering ETL Pipeline
 
 An end-to-end data engineering project designed to automate the extraction, transformation, validation, and loading (ETL) of hospital data using Python and PostgreSQL.
@@ -8,7 +7,6 @@ This project demonstrates a complete ETL workflow, including data quality checks
 ## Project Overview
 
 The pipeline consolidates data from multiple hospital CSV files, cleans and validates records, and loads the resulting data into a PostgreSQL database.
-
 
 ## ETL Architecture
 
@@ -29,8 +27,9 @@ flowchart TD
     H --> E
 ```
 
+## Tech Stack
 
-<h2 align="center">Tech Stack</h2>
+<h2 align="center">Technologies</h2>
 
 <p align="center">
   <img src="https://skillicons.dev/icons?i=python,postgres,git,github,vscode" />
@@ -58,7 +57,6 @@ flowchart TD
 ```text
 proyecto-python-data-engineering/
 │
-├── config/                  # Configuration files
 ├── data/
 │   ├── raw/                 # Original hospital CSV files
 │   ├── processed/           # Cleaned and validated datasets
@@ -66,12 +64,14 @@ proyecto-python-data-engineering/
 │
 ├── logs/                    # Pipeline execution logs
 ├── src/                     # Python ETL scripts
-├── tests/                   # Testing files
 │
-├── .env                     # Database credentials (not tracked by Git)
+├── .env                     # Local database credentials (not tracked by Git)
 ├── .gitignore               # Files excluded from Git
 ├── ejecutar_pipeline.bat    # Windows pipeline execution script
 └── README.md                # Project documentation
+```
+
+**Note:** The `data/` and `logs/` directories are generated locally and excluded from Git. The `.env` file must be created locally and is also excluded from Git.
 
 ## Installation and Setup
 
@@ -80,23 +80,58 @@ proyecto-python-data-engineering/
 ```bash
 git clone https://github.com/CarlosRaulArdila/proyecto-python-data-engineering.git
 cd proyecto-python-data-engineering
+```
 
-# Create and activate the Python environment:
+### 2. Create and activate the Python environment
+
+```bash
 conda create -n data_engineering python=3.12
 conda activate data_engineering
+```
 
-# Install dependencies:
+### 3. Install dependencies
+
+```bash
 pip install pandas sqlalchemy psycopg2-binary python-dotenv
+```
 
-# Create a .env file in the project root directory:
+### 4. Configure PostgreSQL
+
+Make sure PostgreSQL is running and create a database named `hospital_dw`.
+
+Create a `.env` file in the project root directory with your database credentials:
+
+```env
 DB_HOST=localhost
 DB_PORT=5433
 DB_NAME=hospital_dw
 DB_USER=your_username
 DB_PASSWORD=your_password
+```
 
-# Run the ETL pipeline:
+Replace the example values with your own PostgreSQL credentials.
+
+### 5. Generate the synthetic datasets
+
+```bash
+python src/generar_datos.py
+```
+
+This creates the sample hospital CSV files required by the pipeline.
+
+### 6. Create the database table
+
+```bash
+python src/crear_tabla.py
+```
+
+### 7. Run the ETL pipeline
+
+```bash
 python src/ejecutar_pipeline.py
+```
+
+**Note:** PostgreSQL must be running, the `hospital_dw` database must exist, and the `.env` file must contain valid connection settings before executing the pipeline.
 
 ## Pipeline Execution
 
