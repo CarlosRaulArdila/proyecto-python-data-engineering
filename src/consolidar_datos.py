@@ -1,63 +1,89 @@
 
 import pandas as pd
-from pathlib import Path
 
-# 1. Definir las rutas del proyecto
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-RAW_DIR = PROJECT_DIR / "data" / "raw"
-PROCESSED_DIR = PROJECT_DIR / "data" / "processed"
+from src.configuracion import BASE_DIR, CONFIG
 
-# 2. Identificar los archivos de los hospitales
-archivos = {
-    "hospital_1.csv": "Hospital 1",
-    "hospital_2.csv": "Hospital 2",
-    "hospital_3.csv": "Hospital 3"
-}
 
-# 3. Crear una lista para almacenar los DataFrames
-lista_hospitales = []
+# Obtener las rutas desde la configuración
+RAW_DIR = BASE_DIR / CONFIG["rutas"]["raw"]
+PROCESSED_DIR = BASE_DIR / CONFIG["rutas"]["processed"]
 
-# 4. Leer y consolidar cada archivo
-for archivo, hospital in archivos.items():
 
-    ruta = RAW_DIR / archivo
+def consolidar_datos(archivos, raw_dir):
+    """
+    Lee los archivos CSV de los hospitales y los consolida
+    en un único DataFrame.
+    """
 
-    df = pd.read_csv(
-        ruta,
-        dtype={"numero_historia": str}
+    lista_hospitales = []
+
+    for archivo, hospital in archivos.items():
+
+        ruta = raw_dir / archivo
+
+        if not ruta.exists():
+            raise FileNotFoundError(
+                f"No se encontró el archivo: {ruta}"
+            )
+
+        df = pd.read_csv(
+            ruta,
+            dtype={"numero_historia": str}
+        )
+
+        df["hospital_origen"] = hospital
+
+        lista_hospitales.append(df)
+
+        print(f"{hospital}: {len(df)} registros cargados")
+
+    if not lista_hospitales:
+        raise ValueError("No se encontraron archivos para consolidar.")
+
+    df_consolidado = pd.concat(
+        lista_hospitales,
+        ignore_index=True
     )
 
-    # Añadir el hospital de procedencia
-    df["hospital_origen"] = hospital
+    return df_consolidado
 
-    # Agregar el DataFrame a la lista
-    lista_hospitales.append(df)
 
-    print(f"{hospital}: {len(df)} registros cargados")
+def ejecutar_consolidacion():
 
-# 5. Unir todos los DataFrames
-df_consolidado = pd.concat(
-    lista_hospitales,
-    ignore_index=True
-)
+    # Construir las fuentes desde config.yaml
+    archivos = {
+        fuente["archivo"]: fuente["nombre"]
+        for fuente in CONFIG["fuentes"]
+    }
 
-# 6. Crear la carpeta de destino si no existe
-PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    df_consolidado = consolidar_datos(
+        archivos,
+        RAW_DIR
+    )
 
-# 7. Guardar el archivo consolidado
-ruta_salida = PROCESSED_DIR / "datos_consolidados_sin_limpieza.csv"
+    PROCESSED_DIR.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-df_consolidado.to_csv(
-    ruta_salida,
-    index=False,
-    encoding="utf-8-sig"
-)
+    # Nombre del archivo definido en config.yaml
+    nombre_salida = CONFIG["archivos"]["consolidados"]
+    ruta_salida = PROCESSED_DIR / nombre_salida
 
-# 8. Mostrar resultados
-print("\nCONSOLIDACIÓN COMPLETADA")
-print(f"Total de registros: {len(df_consolidado)}")
-print(f"Total de columnas: {len(df_consolidado.columns)}")
-print(f"Archivo generado: {ruta_salida}")
+    df_consolidado.to_csv(
+        ruta_salida,
+        index=False,
+        encoding="utf-8-sig"
+    )
 
-print("\nVista previa:")
-print(df_consolidado.head(10))
+    print("\nCONSOLIDACIÓN COMPLETADA")
+    print(f"Total de registros: {len(df_consolidado)}")
+    print(f"Total de columnas: {len(df_consolidado.columns)}")
+    print(f"Archivo generado: {ruta_salida}")
+
+    print("\nVista previa:")
+    print(df_consolidado.head(10))
+
+
+if __name__ == "__main__":
+    ejecutar_consolidacion()

@@ -1,0 +1,84 @@
+
+# ============================================================
+# CONFIGURACIÓN GENERAL DEL PROYECTO
+# ============================================================
+
+proyecto:
+  nombre: "proyecto_python_data_engineering"
+  entorno: "desarrollo"
+
+
+# ============================================================
+# FUENTES DE DATOS
+# ============================================================
+
+fuentes:
+  - nombre: "Hospital 1"
+    archivo: "hospital_1.csv"
+
+  - nombre: "Hospital 2"
+    archivo: "hospital_2.csv"
+
+  - nombre: "Hospital 3"
+    archivo: "hospital_3.csv"
+
+
+# ============================================================
+# RUTAS DEL PROYECTO
+# ============================================================
+
+rutas:
+  raw: "data/raw"
+  processed: "data/processed"
+  rejected: "data/rejected"
+  logs: "logs"
+
+
+# ============================================================
+# ARCHIVOS GENERADOS POR EL PIPELINE
+# ============================================================
+
+archivos:
+  consolidados: "datos_consolidados_sin_limpieza.csv"
+  limpios: "datos_limpios.csv"
+  validados: "datos_validados.csv"
+
+  incompletos: "registros_incompletos.csv"
+  duplicados: "registros_duplicados.csv"
+  fuera_reglas: "registros_fuera_reglas.csv"
+
+
+# ============================================================
+# CONFIGURACIÓN DEL PIPELINE
+# ============================================================
+
+pipeline:
+  tareas:
+    - "consolidar_datos.py"
+    - "limpiar_datos.py"
+    - "validar_reglas.py"
+    - "cargar_incremental.py"
+
+  detener_si_falla: true
+
+
+# ============================================================
+# CONFIGURACIÓN DE POSTGRESQL
+# ============================================================
+
+base_datos:
+  esquema: "public"
+  tabla_destino: "hospital_registros"
+  tabla_auditoria: "etl_auditoria"
+
+
+# ============================================================
+# CONFIGURACIÓN DE LOGS
+# ============================================================
+
+logging:
+  archivo: "pipeline.log"
+  nivel: "INFO"
+  max_bytes: 5242880
+  backup_count: 5
+  encoding: "utf-8"
