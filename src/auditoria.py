@@ -1,4 +1,6 @@
 
+import uuid
+
 from sqlalchemy import text
 
 try:
@@ -7,23 +9,57 @@ except ModuleNotFoundError:
     from conexion_db import engine
 
 
-def registrar_inicio():
+def registrar_inicio(
+    run_id=None,
+    proyecto_id=None,
+    pipeline_id=None,
+    orquestador="manual",
+    version_pipeline=None,
+    ambiente=None,
+    archivo_log=None
+):
+    if run_id is None:
+        run_id = uuid.uuid4()
 
     consulta = text("""
         INSERT INTO public.etl_auditoria (
             fecha_inicio,
-            estado
+            estado,
+            run_id,
+            proyecto_id,
+            pipeline_id,
+            orquestador,
+            version_pipeline,
+            ambiente,
+            archivo_log
         )
         VALUES (
             CURRENT_TIMESTAMP,
-            'EN_PROCESO'
+            'EN_PROCESO',
+            :run_id,
+            :proyecto_id,
+            :pipeline_id,
+            :orquestador,
+            :version_pipeline,
+            :ambiente,
+            :archivo_log
         )
         RETURNING id;
     """)
 
     with engine.begin() as conexion:
-
-        resultado = conexion.execute(consulta)
+        resultado = conexion.execute(
+            consulta,
+            {
+                "run_id": run_id,
+                "proyecto_id": proyecto_id,
+                "pipeline_id": pipeline_id,
+                "orquestador": orquestador,
+                "version_pipeline": version_pipeline,
+                "ambiente": ambiente,
+                "archivo_log": archivo_log
+            }
+        )
 
         id_ejecucion = resultado.scalar_one()
 
@@ -40,7 +76,6 @@ def registrar_fin(
     duracion_segundos=0,
     mensaje_error=None
 ):
-
     consulta = text("""
         UPDATE public.etl_auditoria
         SET
@@ -56,7 +91,6 @@ def registrar_fin(
     """)
 
     with engine.begin() as conexion:
-
         resultado = conexion.execute(
             consulta,
             {

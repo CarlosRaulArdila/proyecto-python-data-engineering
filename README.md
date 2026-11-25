@@ -1,165 +1,241 @@
 # Hospital Data Engineering ETL Pipeline
 
-An end-to-end data engineering project designed to automate the extraction, transformation, validation, and loading (ETL) of hospital data using Python and PostgreSQL.
+A modular and reusable end-to-end Data Engineering project designed to consolidate, clean, validate, and incrementally load hospital data using Python, PostgreSQL, Docker, and Apache Airflow.
 
-This project demonstrates a complete ETL workflow, including data quality checks, incremental loading (UPSERT), error handling, logging, and task scheduling.
+The project includes data quality controls, automated testing, incremental UPSERT operations, execution auditing, logging, containerization, and workflow orchestration.
 
 ## Project Overview
 
-The pipeline consolidates data from multiple hospital CSV files, cleans and validates records, and loads the resulting data into a PostgreSQL database.
+The pipeline processes data from multiple hospital CSV sources and loads validated records into a PostgreSQL data warehouse.
 
-## ETL Architecture
+Its architecture separates data processing, orchestration, persistence, and execution auditing to facilitate maintenance, scalability, and reuse in other data engineering projects.
 
-The following diagram illustrates the end-to-end data pipeline, from synthetic hospital CSV files to the PostgreSQL data warehouse.
+## Architecture
 
 ```mermaid
 flowchart TD
-    A["Hospital CSV Files"] --> B["Data Consolidation"]
-    B --> C["Data Cleaning"]
-    C --> D["Data Validation"]
-    D --> E["Incremental Loading (UPSERT)"]
-    E --> F[("PostgreSQL Database")]
+    A["Hospital CSV Sources"] --> B["Raw Data"]
+    B --> C["Data Consolidation"]
+    C --> D["Data Cleaning"]
+    D --> E["Data Validation"]
+    E --> F["Processed and Rejected Data"]
+    F --> G["Incremental Loading"]
+    G --> H[("PostgreSQL Data Warehouse")]
 
-    G["Windows Task Scheduler"] --> H["Python Orchestrator"]
-    H --> B
-    H --> C
-    H --> D
-    H --> E
-```
+    I["Apache Airflow"] --> J["DockerOperator"]
+    J --> K["ETL Docker Container"]
+    K --> C
+    K --> D
+    K --> E
+    K --> G
 
-## Tech Stack
+    K --> L["Execution Audit"]
+    L --> H
 
-<h2 align="center">Technologies</h2>
+Technology Stack
+Technology	Purpose
+Python 3.12	ETL development
+Pandas	Data transformation
+SQLAlchemy	Database connectivity
+PostgreSQL 16	Data warehouse and audit storage
+Docker	ETL containerization
+Apache Airflow 2.10.3	Workflow orchestration
+Pytest	Automated testing
+Conda	Python environment management
+Git	Version control
 
-<p align="center">
-  <img src="https://skillicons.dev/icons?i=python,postgres,git,github,vscode" />
-</p>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" />
-  <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Windows_Task_Scheduler-0078D4?style=for-the-badge&logo=windows&logoColor=white" />
-</p>
+Key Features
+- Data Generation: Creates synthetic hospital datasets for development and testing.
+- Data Consolidation: Combines multiple CSV sources into a unified dataset.
+- Data Cleaning: Identifies incomplete and duplicate records.
+- Data Validation: Applies predefined business rules.
+- Incremental Loading: Uses PostgreSQL UPSERT operations to insert or update records.
+- Idempotency: Prevents unnecessary database operations when source data has not changed.
+- Automated Testing: Includes unit and integration-oriented tests using Pytest.
+- Containerization: Packages the ETL application in a Docker image.
+- Workflow Orchestration: Executes the ETL pipeline through Apache Airflow and DockerOperator.
+- Execution Auditing: Stores execution metadata, metrics, duration, status, and error information in PostgreSQL.
+- Logging and Error Handling: Maintains execution logs and pipeline error information.
 
-## Key Features
 
-- **Data Generation:** Creates synthetic hospital datasets for testing.
-- **Data Consolidation:** Combines CSV files from multiple hospitals into a unified dataset.
-- **Data Cleaning:** Removes incomplete and duplicate records.
-- **Data Validation:** Applies business rules to ensure data quality.
-- **Incremental Loading:** Uses PostgreSQL UPSERT to insert new records and update existing ones.
-- **Database Integration:** Connects Python to PostgreSQL using SQLAlchemy.
-- **Logging and Error Handling:** Records pipeline execution details and errors.
-- **Automation:** Executes the ETL pipeline automatically using Windows Task Scheduler.
+Project Structure
 
-## Project Structure
-
-```text
-proyecto-python-data-engineering/
+proyecto_python_data_engineering/
+│
+├── config/
+│   └── config.yaml
+│
+├── dags/
+│   └── hospital_etl_dag.py
 │
 ├── data/
-│   ├── raw/                 # Original hospital CSV files
-│   ├── processed/           # Cleaned and validated datasets
-│   └── rejected/            # Records rejected during processing
+│   ├── raw/
+│   ├── processed/
+│   └── rejected/
 │
-├── logs/                    # Pipeline execution logs
-├── src/                     # Python ETL scripts
+├── docs/
+│   ├── README.md
+│   ├── arquitectura.md
+│   ├── modulos.md
+│   ├── configuracion.md
+│   ├── despliegue.md
+│   └── operacion.md
 │
-├── .env                     # Local database credentials (not tracked by Git)
-├── .gitignore               # Files excluded from Git
-├── ejecutar_pipeline.bat    # Windows pipeline execution script
-└── README.md                # Project documentation
-```
+├── logs/
+├── src/
+├── tests/
+│
+├── .dockerignore
+├── .env
+├── .gitignore
+├── Dockerfile
+├── ejecutar_pipeline.bat
+├── pytest.ini
+├── README.md
+└── requirements.txt
 
-**Note:** The `data/` and `logs/` directories are generated locally and excluded from Git. The `.env` file must be created locally and is also excluded from Git.
 
-## Installation and Setup
+Installation and Local Development
+1. Clone the repository
 
-### 1. Clone the repository
-
-```bash
 git clone https://github.com/CarlosRaulArdila/proyecto-python-data-engineering.git
 cd proyecto-python-data-engineering
-```
 
-### 2. Create and activate the Python environment
 
-```bash
+2. Create the Python environment
 conda create -n data_engineering python=3.12
 conda activate data_engineering
-```
 
-### 3. Install dependencies
+3. Install dependencies
 
-```bash
-pip install pandas sqlalchemy psycopg2-binary python-dotenv
-```
+pip install -r requirements.txt
 
-### 4. Configure PostgreSQL
 
-Make sure PostgreSQL is running and create a database named `hospital_dw`.
+4. Configure environment variables
+Create a .env file in the project root with the database connection settings required by the local execution configuration.
 
-Create a `.env` file in the project root directory with your database credentials:
+Example:
 
-```env
 DB_HOST=localhost
-DB_PORT=5433
+DB_PORT=5434
 DB_NAME=hospital_dw
 DB_USER=your_username
 DB_PASSWORD=your_password
-```
 
-Replace the example values with your own PostgreSQL credentials.
 
-### 5. Generate the synthetic datasets
+Replace the example values with the credentials and connection settings of your environment.
 
-```bash
+Never commit .env or expose database credentials.
+
+
+5. Generate synthetic data
+
 python src/generar_datos.py
-```
 
-This creates the sample hospital CSV files required by the pipeline.
+6. Create the database table
 
-### 6. Create the database table
-
-```bash
 python src/crear_tabla.py
-```
 
-### 7. Run the ETL pipeline
+7. Execute the pipeline locally
 
-```bash
 python src/ejecutar_pipeline.py
-```
 
-**Note:** PostgreSQL must be running, the `hospital_dw` database must exist, and the `.env` file must contain valid connection settings before executing the pipeline.
+The local execution requires a running PostgreSQL instance, the target database, and valid environment variables.
+Docker and Airflow Execution
+The project includes a Docker image for executing the ETL application:
 
-## Pipeline Execution
+docker build -t hospital-etl:1.0 .
 
-The ETL pipeline executes the following steps:
+The Airflow environment is maintained separately and uses Docker Compose.
 
-1. Consolidates data from three hospital CSV files.
-2. Cleans incomplete and duplicate records.
-3. Validates data using predefined business rules.
-4. Loads validated records into PostgreSQL using incremental UPSERT operations.
+To start the Airflow environment:
 
-### Execution Results
+cd ~/airflow-docker
+docker compose up -d
 
-| Metric | Result |
-|---|---:|
-| Source hospitals | 3 |
-| Initial records | 15 |
-| Incomplete records rejected | 2 |
-| Duplicate records removed | 1 |
-| Validated records | 12 |
-| Validation errors | 0 |
-| Database operations on repeated execution | 0 |
+The main DAG is:
 
-The pipeline is designed to be idempotent: running it again without new or modified source data does not create duplicate records or unnecessary updates.
+hospital_etl_pipeline
 
-## Future Improvements
+To trigger it manually:
 
-- **Automated Testing:** Implement unit and integration tests using Pytest.
-- **Advanced Orchestration:** Integrate Apache Airflow to manage and monitor ETL workflows.
-- **Cloud Integration:** Deploy the data pipeline to a cloud platform.
-- **Data Monitoring:** Implement data quality metrics and pipeline performance monitoring.
-- **Containerization:** Dockerize the ETL application for easier deployment and portability.
+docker compose exec scheduler airflow dags trigger hospital_etl_pipeline
+
+Airflow Web UI:
+
+http://localhost:8080
+
+For detailed deployment instructions, see Deployment Documentation.
+Testing
+Run the automated test suite:
+
+pytest -v
+
+The validated test suite currently contains 22 passing tests.
+Validated Execution Results
+The initial synthetic dataset contains 15 records from three hospital sources.
+Metric	Result
+Source hospitals	3
+Initial records	15
+Clean records	12
+Rejected records	3
+Incomplete records rejected	2
+Duplicate records rejected	1
+Database operations on unchanged rerun	0
+Automated tests passed	22
+
+The integrated execution through Apache Airflow and Docker has been validated successfully.
+
+A repeated execution without source changes can complete successfully with zero database operations, demonstrating the idempotent behavior of the incremental loading process.
+
+Execution Auditing
+Every pipeline execution is registered in:
+
+public.etl_auditoria
+
+The audit table stores:
+- Execution identifier (run_id).
+- Project and pipeline identifiers.
+- Orchestrator and pipeline version.
+- Execution environment.
+- Start and end timestamps.
+- Execution status and duration.
+- Extracted, clean, and rejected record counts.
+- Database operations.
+- Log file reference and error information.
+
+Documentation
+Detailed technical documentation is available in the docs/ directory.
+Document	Description
+Architecture	System architecture and data flow
+Modules	Python module inventory
+Configuration	Configuration and environment variables
+Deployment	Docker and Airflow deployment
+Operations	Execution, monitoring, auditing, and maintenance
+
+
+Reusability
+This project is designed as a reusable foundation for other ETL initiatives.
+
+To adapt it to a new project, configure:
+1. Data sources and input formats.
+2. Data cleaning and validation rules.
+3. PostgreSQL database and destination tables.
+4. Environment variables and database connections.
+5. Docker image and volume mappings.
+6. Airflow DAG identifiers and orchestration settings.
+7. Project and pipeline metadata.
+
+
+Future Improvements
+- Cloud deployment and integration.
+- Advanced data quality monitoring.
+- Automated scheduling and operational alerting.
+- Support for additional data sources and formats.
+- Expanded integration and end-to-end testing.
+- Infrastructure and deployment automation.
+
+
+Project version: 1.0.0
+Status: Core ETL, incremental loading, Docker execution, Airflow orchestration, auditing, and automated tests validated.

@@ -1,24 +1,27 @@
 FROM python:3.12-slim
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Instalar dependencias del sistema
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       libpq5 \
-    && rm -rf /var/lib/apt/lists/*
+        libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system etl \
+    && useradd --system --gid etl --create-home --home-dir /home/etl etl
 
-# Copiar e instalar dependencias Python
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copiar código y configuración del proyecto
-COPY src/ ./src/
-COPY config/ ./config/
+COPY --chown=etl:etl src/ ./src/
+COPY --chown=etl:etl config/ ./config/
 
-# Crear directorios de trabajo
-RUN mkdir -p data/raw data/processed data/rejected logs
+RUN mkdir -p data/raw data/processed data/rejected logs \
+    && chown -R etl:etl /app
 
-# Ejecutar el pipeline
+USER etl
+
 CMD ["python", "-m", "src.ejecutar_pipeline"]

@@ -5,6 +5,8 @@ import logging
 import time
 import csv
 import re
+import os
+import uuid
 
 from pathlib import Path
 from logging.handlers import RotatingFileHandler
@@ -23,17 +25,9 @@ except ModuleNotFoundError:
 
 DIRECTORIO_PROYECTO = BASE_DIR
 
-DIRECTORIO_LOGS = (
-    BASE_DIR / CONFIG["rutas"]["logs"]
-)
-
-DIRECTORIO_PROCESADOS = (
-    BASE_DIR / CONFIG["rutas"]["processed"]
-)
-
-DIRECTORIO_RECHAZADOS = (
-    BASE_DIR / CONFIG["rutas"]["rejected"]
-)
+DIRECTORIO_LOGS = BASE_DIR / CONFIG["rutas"]["logs"]
+DIRECTORIO_PROCESADOS = BASE_DIR / CONFIG["rutas"]["processed"]
+DIRECTORIO_RECHAZADOS = BASE_DIR / CONFIG["rutas"]["rejected"]
 
 DIRECTORIO_LOGS.mkdir(
     parents=True,
@@ -47,9 +41,7 @@ DIRECTORIO_LOGS.mkdir(
 
 CONFIG_LOGS = CONFIG["logging"]
 
-ruta_log = (
-    DIRECTORIO_LOGS / CONFIG_LOGS["archivo"]
-)
+ruta_log = DIRECTORIO_LOGS / CONFIG_LOGS["archivo"]
 
 nivel_log = getattr(
     logging,
@@ -127,7 +119,11 @@ def obtener_operaciones_bd(salida):
         r"\(insertados o actualizados\):\s*(\d+)"
     )
 
-    coincidencia = re.search(patron, salida)
+    coincidencia = re.search(
+        patron,
+        salida,
+        flags=re.IGNORECASE
+    )
 
     if not coincidencia:
         raise ValueError(
@@ -150,20 +146,71 @@ def ejecutar_pipeline():
     print("INICIANDO PIPELINE ETL")
     print("===================================")
 
-    logging.info("INICIO DEL PIPELINE ETL")
+    logger.info("INICIO DEL PIPELINE ETL")
 
     # --------------------------------------------------------
-    # 7.1. REGISTRAR INICIO DE AUDITORÍA
+    # 7.1. IDENTIFICAR LA EJECUCIÓN
     # --------------------------------------------------------
 
-    id_ejecucion = registrar_inicio()
+    run_id = str(uuid.uuid4())
 
-    logging.info(
-        f"Auditoría iniciada | ID de ejecución: {id_ejecucion}"
+    orquestador = os.getenv(
+        "ETL_ORCHESTRATOR",
+        "manual"
+    )
+
+    pipeline_id = os.getenv(
+        "ETL_PIPELINE_ID",
+        CONFIG["pipeline"].get(
+            "id",
+            "pipeline_principal"
+        )
+    )
+
+    version_pipeline = os.getenv(
+        "ETL_PIPELINE_VERSION",
+        CONFIG["proyecto"].get(
+            "version",
+            "1.0.0"
+        )
+    )
+
+    ambiente = os.getenv(
+        "ETL_ENVIRONMENT",
+        CONFIG["proyecto"]["entorno"]
     )
 
     # --------------------------------------------------------
-    # 7.2. INICIALIZAR MÉTRICAS
+    # 7.2. REGISTRAR INICIO DE AUDITORÍA
+    # --------------------------------------------------------
+
+    id_ejecucion = registrar_inicio(
+        run_id=run_id,
+        proyecto_id=CONFIG["proyecto"]["nombre"],
+        pipeline_id=pipeline_id,
+        orquestador=orquestador,
+        version_pipeline=version_pipeline,
+        ambiente=ambiente,
+        archivo_log=str(ruta_log)
+    )
+
+    logger.info(
+        f"Auditoría iniciada | ID: {id_ejecucion}"
+    )
+
+    logger.info(f"RUN ID: {run_id}")
+    logger.info(f"Proyecto: {CONFIG['proyecto']['nombre']}")
+    logger.info(f"Pipeline: {pipeline_id}")
+    logger.info(f"Orquestador: {orquestador}")
+    logger.info(f"Versión: {version_pipeline}")
+    logger.info(f"Ambiente: {ambiente}")
+    logger.info(f"Archivo de log: {ruta_log}")
+
+    print(f"RUN ID: {run_id}")
+    print(f"Orquestador: {orquestador}")
+
+    # --------------------------------------------------------
+    # 7.3. INICIALIZAR MÉTRICAS
     # --------------------------------------------------------
 
     registros_extraidos = 0
@@ -175,7 +222,7 @@ def ejecutar_pipeline():
     mensaje_error = None
 
     # --------------------------------------------------------
-    # 7.3. EJECUTAR LAS TAREAS
+    # 7.4. EJECUTAR LAS TAREAS
     # --------------------------------------------------------
 
     try:
@@ -186,7 +233,7 @@ def ejecutar_pipeline():
 
             print(f"\nEjecutando: {tarea}")
 
-            logging.info(f"Iniciando tarea: {tarea}")
+            logger.info(f"Iniciando tarea: {tarea}")
 
             inicio_tarea = time.perf_counter()
 
@@ -205,14 +252,14 @@ def ejecutar_pipeline():
             )
 
             # ------------------------------------------------
-            # 7.4. REGISTRAR SALIDA DEL SCRIPT
+            # 7.5. REGISTRAR SALIDA DEL SCRIPT
             # ------------------------------------------------
 
             if resultado.stdout:
 
                 print(resultado.stdout, end="")
 
-                logging.info(
+                logger.info(
                     f"Salida de {tarea}:\n"
                     f"{resultado.stdout.strip()}"
                 )
@@ -225,13 +272,13 @@ def ejecutar_pipeline():
                     file=sys.stderr
                 )
 
-                logging.warning(
+                logger.warning(
                     f"Salida de error de {tarea}:\n"
                     f"{resultado.stderr.strip()}"
                 )
 
             # ------------------------------------------------
-            # 7.5. CONTABILIZAR REGISTROS EXTRAÍDOS
+            # 7.6. CONTABILIZAR REGISTROS EXTRAÍDOS
             # ------------------------------------------------
 
             if tarea == "consolidar_datos.py":
@@ -245,12 +292,12 @@ def ejecutar_pipeline():
                     ruta_consolidados
                 )
 
-                logging.info(
+                logger.info(
                     f"Registros extraídos: {registros_extraidos}"
                 )
 
             # ------------------------------------------------
-            # 7.6. CONTABILIZAR REGISTROS LIMPIOS Y RECHAZADOS
+            # 7.7. CONTABILIZAR REGISTROS LIMPIOS Y RECHAZADOS
             # ------------------------------------------------
 
             if tarea == "limpiar_datos.py":
@@ -279,17 +326,17 @@ def ejecutar_pipeline():
                     + contar_registros(ruta_duplicados)
                 )
 
-                logging.info(
+                logger.info(
                     f"Registros limpios: {registros_limpios}"
                 )
 
-                logging.info(
+                logger.info(
                     "Registros rechazados durante limpieza: "
                     f"{registros_rechazados}"
                 )
 
             # ------------------------------------------------
-            # 7.7. SUMAR RECHAZADOS POR REGLAS DE VALIDACIÓN
+            # 7.8. SUMAR RECHAZADOS POR REGLAS DE VALIDACIÓN
             # ------------------------------------------------
 
             if tarea == "validar_reglas.py":
@@ -305,18 +352,18 @@ def ejecutar_pipeline():
 
                 registros_rechazados += rechazados_validacion
 
-                logging.info(
+                logger.info(
                     "Registros rechazados por reglas: "
                     f"{rechazados_validacion}"
                 )
 
-                logging.info(
+                logger.info(
                     f"Total de registros rechazados: "
                     f"{registros_rechazados}"
                 )
 
             # ------------------------------------------------
-            # 7.8. CONTABILIZAR OPERACIONES EN POSTGRESQL
+            # 7.9. CONTABILIZAR OPERACIONES EN POSTGRESQL
             # ------------------------------------------------
 
             if tarea == "cargar_incremental.py":
@@ -325,13 +372,13 @@ def ejecutar_pipeline():
                     resultado.stdout
                 )
 
-                logging.info(
+                logger.info(
                     f"Operaciones realizadas en PostgreSQL: "
                     f"{operaciones_bd}"
                 )
 
             # ------------------------------------------------
-            # 7.9. REGISTRAR DURACIÓN DE CADA TAREA
+            # 7.10. REGISTRAR DURACIÓN DE CADA TAREA
             # ------------------------------------------------
 
             duracion_tarea = (
@@ -340,13 +387,13 @@ def ejecutar_pipeline():
 
             print(f"Correcto: {tarea}")
 
-            logging.info(
+            logger.info(
                 f"Tarea completada: {tarea} | "
                 f"Duración: {duracion_tarea:.2f} segundos"
             )
 
         # ----------------------------------------------------
-        # 7.10. FINALIZACIÓN EXITOSA
+        # 7.11. FINALIZACIÓN EXITOSA
         # ----------------------------------------------------
 
         duracion_total = time.perf_counter() - inicio
@@ -362,12 +409,12 @@ def ejecutar_pipeline():
             mensaje_error=None
         )
 
-        logging.info(
+        logger.info(
             f"Auditoría finalizada correctamente | "
-            f"ID: {id_ejecucion}"
+            f"ID: {id_ejecucion} | RUN ID: {run_id}"
         )
 
-        logging.info(
+        logger.info(
             f"PIPELINE FINALIZADO | "
             f"Duración total: {duracion_total:.2f} segundos"
         )
@@ -385,7 +432,7 @@ def ejecutar_pipeline():
         return 0
 
     # --------------------------------------------------------
-    # 7.11. GESTIONAR ERRORES DEL PIPELINE
+    # 7.12. GESTIONAR ERRORES DEL PIPELINE
     # --------------------------------------------------------
 
     except Exception as error:
@@ -396,23 +443,23 @@ def ejecutar_pipeline():
         if isinstance(error, subprocess.CalledProcessError):
 
             if error.stdout:
-                logging.error(
+                logger.error(
                     f"Salida del script:\n{error.stdout}"
                 )
 
             if error.stderr:
-                logging.error(
+                logger.error(
                     f"Error detallado del script:\n{error.stderr}"
                 )
 
-        logging.exception(
+        logger.exception(
             "El pipeline ETL ha fallado."
         )
 
         duracion_total = time.perf_counter() - inicio
 
         # ----------------------------------------------------
-        # 7.12. REGISTRAR EL FALLO EN LA AUDITORÍA
+        # 7.13. REGISTRAR EL FALLO EN LA AUDITORÍA
         # ----------------------------------------------------
 
         try:
@@ -428,14 +475,14 @@ def ejecutar_pipeline():
                 mensaje_error=mensaje_error
             )
 
-            logging.info(
+            logger.info(
                 f"Auditoría cerrada con estado FALLIDO | "
-                f"ID: {id_ejecucion}"
+                f"ID: {id_ejecucion} | RUN ID: {run_id}"
             )
 
         except Exception:
 
-            logging.exception(
+            logger.exception(
                 "No fue posible cerrar el registro de auditoría."
             )
 
