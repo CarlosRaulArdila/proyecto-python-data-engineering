@@ -68,6 +68,19 @@ FROM public.etl_auditoria
 ORDER BY fecha_inicio DESC
 LIMIT 20;
 
+Linaje: qué archivos alimentaron cada ejecución (tabla etl_archivos_procesados):
+
+SELECT e.id, e.fecha_inicio, e.estado, a.fuente, a.nombre_archivo, a.registros,
+       left(a.hash_sha256, 12) AS hash
+FROM public.etl_auditoria e
+JOIN public.etl_archivos_procesados a ON a.run_id = e.run_id
+ORDER BY e.id DESC, a.nombre_archivo
+LIMIT 30;
+
+Con ingesta.modo: incremental, un archivo cuyo hash ya está en esta tabla se
+omite en las siguientes ejecuciones. Para forzar su reproceso, elimine su fila
+de etl_archivos_procesados (procedimiento controlado).
+
 ## 6. Interpretación de métricas
 Campo	Significado
 registros_extraidos	Registros obtenidos de las fuentes

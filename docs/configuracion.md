@@ -20,7 +20,8 @@ Entre sus configuraciones se encuentran:
 | Sección | Contenido |
 |---|---|
 | `proyecto` | Nombre, versión y entorno. |
-| `fuentes` | Archivos de entrada y nombre de la fuente (`hospital_origen`). |
+| `fuentes` | Fuentes de entrada: `nombre` (se guarda en `hospital_origen`) y `archivo` (nombre exacto) o `patron` (comodines, para lotes). |
+| `ingesta` | `modo`: `completa` (todos los archivos en cada ejecución) o `incremental` (solo archivos no cargados antes, por hash SHA-256). |
 | `esquema` | Contrato de datos: columnas en orden, `tipo` (texto, entero, decimal, fecha, booleano), `obligatoria`, `derivada`, `longitud_max` y `descripcion`. |
 | `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
@@ -29,7 +30,7 @@ Entre sus configuraciones se encuentran:
 | `pipeline.clave_negocio` | Columnas que identifican un registro; deben coincidir con el índice único de la tabla destino. |
 | `pipeline.tareas` | Etapas en orden: `nombre`, `modulo` y `funcion`. |
 | `pipeline.detener_si_falla` | `true`: se detiene en el primer fallo (FALLIDO). `false`: continúa y termina como PARCIAL. |
-| `base_datos` | Esquema, tabla destino, tabla de auditoría y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
+| `base_datos` | Esquema, tabla destino, tabla de auditoría, `tabla_archivos` (linaje) y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
 | `logging` | Archivo, nivel, rotación y formato (incluye `run_id`). |
 
 Para usar otra configuración sin modificar el archivo del repositorio,

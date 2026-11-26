@@ -11,6 +11,12 @@ proyecto:
 
 # ============================================================
 # FUENTES DE DATOS
+# ------------------------------------------------------------
+# Cada fuente define 'archivo' (nombre exacto) o 'patron'
+# (comodines, para recibir lotes), por ejemplo:
+#   - nombre: "Hospital 4"
+#     patron: "hospital_4_*.csv"
+# El 'nombre' se guarda en la columna hospital_origen.
 # ============================================================
 
 fuentes:
@@ -22,6 +28,21 @@ fuentes:
 
   - nombre: "Hospital 3"
     archivo: "hospital_3.csv"
+
+
+# ============================================================
+# INGESTA
+# ------------------------------------------------------------
+# modo:
+#   completa:    procesa todos los archivos en cada ejecución
+#   incremental: solo procesa archivos que no se hayan cargado
+#                antes (se identifican por su hash SHA-256)
+# En ambos modos, los archivos de cada ejecución exitosa quedan
+# registrados en base_datos.tabla_archivos (linaje).
+# ============================================================
+
+ingesta:
+  modo: "completa"
 
 
 # ============================================================
@@ -140,6 +161,8 @@ archivos:
   fuera_reglas: "registros_fuera_reglas.csv"
   conflictos_clave: "registros_conflicto_clave.csv"
 
+  manifiesto: "manifiesto_archivos.json"
+
 
 # ============================================================
 # CONFIGURACIÓN DEL PIPELINE
@@ -175,6 +198,12 @@ pipeline:
       modulo: "src.cargar_incremental"
       funcion: "ejecutar_carga_incremental"
 
+    # Debe ser la última: registra los archivos procesados solo si
+    # todas las etapas anteriores terminaron bien.
+    - nombre: "registrar_ingesta"
+      modulo: "src.ingesta"
+      funcion: "registrar_ingesta"
+
   # true: la primera etapa que falla detiene el pipeline (FALLIDO).
   # false: continúa con las siguientes y termina como PARCIAL.
   detener_si_falla: true
@@ -188,6 +217,7 @@ base_datos:
   esquema: "public"
   tabla_destino: "hospital_registros"
   tabla_auditoria: "etl_auditoria"
+  tabla_archivos: "etl_archivos_procesados"
 
   # El UPSERT se genera desde el esquema y pipeline.clave_negocio:
   # inserta todas las columnas del esquema y, si la clave ya existe,

@@ -27,6 +27,16 @@ y versionado semántico.
   y `base_datos.columna_actualizacion` opcional. Sin columnas actualizables usa `DO NOTHING`.
 - Verificación previa de la tabla destino: si no existe o le faltan columnas del
   esquema, el pipeline falla con un mensaje que indica cuáles.
+- **Ingesta incremental y linaje** (`src/ingesta.py`, migración `V004`):
+  - Las fuentes admiten `patron` (comodines, para lotes) además de `archivo`.
+  - `ingesta.modo`: `completa` (todos los archivos) o `incremental` (solo los no
+    cargados antes, identificados por hash SHA-256 aunque cambien de nombre).
+  - Tabla `etl_archivos_procesados`: archivo, fuente, hash, tamaño, registros y
+    `run_id` de cada ejecución exitosa.
+  - Nueva etapa final `registrar_ingesta`: registra los archivos solo si todas las
+    etapas anteriores terminaron bien; si la carga falla se reintentan.
+  - Las etapas pueden recibir el contexto de la ejecución (`run_id`, `pipeline_id`,
+    errores previos) declarando un parámetro.
 - `src/sql_utils.py`: validación estricta de nombres de tablas y columnas antes de
   usarlos en SQL (los nombres del esquema deben ser identificadores en minúsculas).
 
