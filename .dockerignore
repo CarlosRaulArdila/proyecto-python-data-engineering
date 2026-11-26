@@ -1,9 +1,17 @@
 .env
+.env.*
+!.env.example
 .git/
+.github/
 .pytest_cache/
+.ruff_cache/
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 data/
 logs/
+tests/
+docs/
+dags/
+_to_delete/

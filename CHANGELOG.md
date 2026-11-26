@@ -1,0 +1,59 @@
+# Historial de cambios
+
+Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
+y versionado semántico.
+
+## [1.1.0] - 2026-11-25 - Fase 1: estabilización
+
+### Añadido
+- Migraciones SQL versionadas en `sql/migraciones/` y aplicador `python -m src.migrar`
+  (idempotente, con bloqueo consultivo y verificación de checksum en `public.etl_migraciones`).
+  - `V001`: tabla `hospital_registros` e **índice único de la clave de negocio**
+    que exige el `ON CONFLICT` de la carga incremental (solo se crea si no existe uno equivalente).
+  - `V002`: tabla `etl_auditoria` con índices (antes no estaba en el repositorio).
+  - `V003`: columnas `fecha_creacion` y `fecha_actualizacion` en la tabla destino.
+- `docker-compose.yml` con warehouse PostgreSQL, migraciones y motor ETL.
+- `.env.example` con todas las variables documentadas.
+- `src/registro_logs.py`: logs a consola y archivo con el `run_id` en cada línea.
+- Detección de **conflictos de clave de negocio** (`registros_conflicto_clave.csv`).
+- Aviso de CSV presentes en `data/raw` que no están declarados en `config.yaml`.
+- Validaciones: edad y duración deben ser números enteros.
+- Estado de auditoría `PARCIAL` cuando `detener_si_falla: false`.
+- DAG: tarea `aplicar_migraciones` antes del pipeline y 2 reintentos por tarea.
+- CI en GitHub Actions: Ruff, pruebas unitarias con cobertura, pruebas de integración
+  contra PostgreSQL 16 y construcción de la imagen Docker.
+- `requirements-dev.txt`, `ruff.toml`, `CHANGELOG.md`.
+- 35 pruebas nuevas (54 unitarias y 3 de integración en total).
+- Checksum de migraciones independiente de los finales de línea (CRLF/LF).
+
+### Cambiado
+- `ejecutar_pipeline.py` ejecuta las etapas **en el mismo proceso** y cada etapa
+  **devuelve sus métricas**; se eliminaron los subprocesos, la lectura de la salida
+  con expresiones regulares y las comparaciones con nombres de archivo.
+- `pipeline.tareas` en `config.yaml` declara `nombre`, `modulo` y `funcion`.
+- La auditoría de inicio está dentro del manejo de errores: si no puede registrarse,
+  el pipeline no se ejecuta y termina con código 1.
+- `conexion_db.py` crea el engine de forma perezosa (`obtener_engine`): importar
+  el código ya no exige credenciales y los tests unitarios funcionan sin `.env`.
+- La carga incremental normaliza los enteros (`33.0` → `33`), acepta un DataFrame
+  vacío y valida el nombre de la tabla contra una lista blanca y un patrón.
+- `configuracion.py` valida las secciones obligatorias y admite `ETL_CONFIG_PATH`
+  y rutas absolutas.
+- Sin rutas absolutas en `generar_datos.py`, `ejecutar_pipeline.bat` y el DAG
+  (este último usa variables de entorno con los valores actuales por defecto).
+- Versión única 1.1.0 en `config.yaml`, imagen Docker (`ETL_VERSION`) y DAG.
+- La imagen Docker incluye `sql/` y excluye tests, docs y DAGs.
+
+### Eliminado
+- `src/cargar_postgresql.py` (carga completa con `TRUNCATE`, sustituida por la carga incremental).
+
+### Obsoleto
+- `src/crear_tabla.py`: delega en `python -m src.migrar`.
+
+### Notas de actualización desde 1.0.0
+1. Ejecutar `python -m src.migrar` sobre la base existente (no borra datos).
+2. Reconstruir la imagen: `docker build --build-arg ETL_VERSION=1.1.0 -t hospital-etl:1.1.0 .`
+3. Ejecutar los módulos con `python -m src.<modulo>` desde la raíz del proyecto.
+
+## [1.0.0]
+- Pipeline ETL modular, carga incremental, Docker, Airflow, auditoría y 22 pruebas.

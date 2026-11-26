@@ -1,51 +1,68 @@
 ﻿# Inventario de módulos Python
 
-Ubicación: `src/`
+Ubicación: `src/` (paquete Python). Todos los módulos se ejecutan desde la raíz
+del proyecto con `python -m src.<modulo>`.
 
-## 1. Módulos de configuración e infraestructura
-
-| Módulo | Responsabilidad |
-|---|---|
-| `configuracion.py` | Cargar y gestionar la configuración del proyecto. |
-| `conexion_db.py` | Gestionar la conexión con PostgreSQL. |
-| `crear_tabla.py` | Crear las tablas necesarias en la base de datos. |
-
-## 2. Módulos de procesamiento ETL
+## 1. Configuración e infraestructura
 
 | Módulo | Responsabilidad |
 |---|---|
-| `consolidar_datos.py` | Integrar los archivos procedentes de las fuentes de datos. |
-| `limpiar_datos.py` | Limpiar los registros y gestionar datos incompletos o duplicados. |
-| `validar_reglas.py` | Aplicar reglas de validación y calidad de datos. |
-| `inspeccionar_datos.py` | Inspeccionar los datos durante el procesamiento. |
+| `configuracion.py` | Carga y valida `config/config.yaml` (o el archivo indicado en `ETL_CONFIG_PATH`). Resuelve rutas relativas desde la raíz del proyecto. |
+| `conexion_db.py` | Crea de forma perezosa un único engine de SQLAlchemy por proceso (`obtener_engine`) y lo libera (`cerrar_engine`). Importarlo no exige credenciales. |
+| `registro_logs.py` | Configura los logs a consola y a archivo rotativo, con el `run_id` en cada línea. |
+| `migrar.py` | Aplica las migraciones SQL versionadas de `sql/migraciones/` y las registra en `public.etl_migraciones`. |
+| `crear_tabla.py` | **Obsoleto.** Se conserva por compatibilidad y delega en `migrar.py`. |
 
-## 3. Módulos de carga
+## 2. Etapas del pipeline
+
+Cada etapa expone una función sin argumentos que **devuelve un diccionario de
+métricas**. El orquestador las declara en `config.yaml` (`pipeline.tareas`).
+
+| Módulo | Función | Responsabilidad | Métricas devueltas |
+|---|---|---|---|
+| `consolidar_datos.py` | `ejecutar_consolidacion` | Une los CSV de las fuentes configuradas y avisa de CSV presentes en `raw/` que no están configurados. | `registros_extraidos` |
+| `limpiar_datos.py` | `ejecutar_limpieza` | Separa incompletos, duplicados exactos y conflictos de clave de negocio. | `registros_limpios`, `registros_rechazados` |
+| `validar_reglas.py` | `ejecutar_validacion` | Aplica las reglas de negocio e indica el motivo de cada rechazo. | `registros_validos`, `registros_rechazados` |
+| `cargar_incremental.py` | `ejecutar_carga_incremental` | UPSERT idempotente en PostgreSQL; normaliza tipos enteros. | `operaciones_bd` |
+
+## 3. Orquestación y auditoría
 
 | Módulo | Responsabilidad |
 |---|---|
-| `cargar_postgresql.py` | Gestionar la carga de datos en PostgreSQL. |
-| `cargar_incremental.py` | Insertar o actualizar registros evitando duplicados. |
+| `ejecutar_pipeline.py` | Ejecuta las etapas en orden dentro del mismo proceso, acumula sus métricas, aplica `detener_si_falla` y devuelve el código de salida (0 = EXITOSO). |
+| `auditoria.py` | Registra el inicio (`EN_PROCESO`) y el cierre (`EXITOSO`, `FALLIDO` o `PARCIAL`) de cada ejecución en `public.etl_auditoria`. |
 
-## 4. Orquestación y auditoría
-
-| Módulo | Responsabilidad |
-|---|---|
-| `ejecutar_pipeline.py` | Coordinar las etapas del pipeline ETL y gestionar su ejecución. |
-| `auditoria.py` | Registrar los metadatos, resultados y estado de cada ejecución. |
-
-## 5. Generación de datos
+## 4. Utilidades de desarrollo
 
 | Módulo | Responsabilidad |
 |---|---|
-| `generar_datos.py` | Generar datos para las fuentes de entrada. |
-| `generar_datos_prueba.py` | Generar datos destinados a pruebas y validaciones. |
+| `generar_datos.py` | Genera los CSV sintéticos de las tres fuentes en la carpeta `raw` configurada. |
+| `generar_datos_prueba.py` | Genera `datos_prueba.csv` con registros válidos e inválidos. |
+| `inspeccionar_datos.py` | Perfilado rápido de los CSV de `raw/`. |
 
-## 6. Consideraciones
+## 5. Retirados
 
-Este inventario describe las responsabilidades previstas a partir de la estructura y los nombres de los módulos.
+| Módulo | Motivo |
+|---|---|
+| `cargar_postgresql.py` | Carga completa con `TRUNCATE`, sustituida por `cargar_incremental.py`. Se eliminó para evitar ejecuciones accidentales que borren la tabla de destino. |
 
-Las responsabilidades específicas y las dependencias entre módulos deberán contrastarse con el código fuente antes de utilizar esta documentación como especificación técnica definitiva.
+## 6. Añadir una etapa nueva
 
-## 7. Total de módulos
+1. Crear una función en un módulo de `src/` que devuelva un diccionario
+   (puede usar las claves `registros_extraidos`, `registros_limpios`,
+   `registros_rechazados` y `operaciones_bd` para que se auditen).
+2. Declararla en `config.yaml`:
 
-13 módulos Python identificados.
+   ```yaml
+   pipeline:
+     tareas:
+       - nombre: "mi_etapa"
+         modulo: "src.mi_modulo"
+         funcion: "ejecutar_mi_etapa"
+   ```
+
+3. Añadir sus pruebas en `tests/`.
+
+---
+
+Documentación: versión 1.1.0

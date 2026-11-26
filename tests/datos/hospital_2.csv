@@ -1,0 +1,6 @@
+﻿numero_historia,fecha,edad,especialidad,tecnica_anestesica,duracion_minutos
+002001,2026-01-15,33.0,Cirugia,General,80
+002002,2026-01-16,48.0,Urologia,Regional,95
+002003,2026-01-17,,Traumatologia,General,130
+002004,2026-01-18,67.0,Cirugia,,70
+002005,2026-01-19,59.0,Urologia,Sedacion,100

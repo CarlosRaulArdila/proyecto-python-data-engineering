@@ -211,3 +211,36 @@ def test_rechazar_hospital_origen_vacio():
     )
 
 
+def test_rechazar_edad_decimal():
+    datos = pd.DataFrame({
+        "numero_historia": ["001010"],
+        "fecha": ["2026-01-19"],
+        "edad": [35.5],
+        "especialidad": ["Cirugia"],
+        "tecnica_anestesica": ["General"],
+        "duracion_minutos": [90],
+        "hospital_origen": ["Hospital 1"]
+    })
+
+    df_validos, df_rechazados = validar_datos(datos)
+
+    assert len(df_validos) == 0
+    assert "Edad no es un número entero" in df_rechazados.iloc[0]["errores_validacion"]
+
+
+def test_aceptar_edad_entera_guardada_como_decimal():
+    # 33.0 proviene de columnas con vacíos en el CSV de origen
+    datos = pd.DataFrame({
+        "numero_historia": ["001011"],
+        "fecha": ["2026-01-20"],
+        "edad": [33.0],
+        "especialidad": ["Cirugia"],
+        "tecnica_anestesica": ["General"],
+        "duracion_minutos": [90.0],
+        "hospital_origen": ["Hospital 1"]
+    })
+
+    df_validos, df_rechazados = validar_datos(datos)
+
+    assert len(df_validos) == 1
+    assert len(df_rechazados) == 0

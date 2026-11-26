@@ -1,0 +1,67 @@
+# ============================================================
+# Entorno local reproducible del motor ETL
+# ------------------------------------------------------------
+#   docker compose up -d warehouse          # base de datos
+#   docker compose run --rm migraciones     # estructura (idempotente)
+#   docker compose run --rm etl             # pipeline completo
+#
+# Las credenciales se leen del archivo .env (ver .env.example).
+# El entorno de Airflow sigue siendo independiente; ver docs/despliegue.md.
+# ============================================================
+
+name: hospital-etl
+
+x-etl-base: &etl-base
+  build:
+    context: .
+    args:
+      ETL_VERSION: ${ETL_IMAGE_TAG:-1.1.0}
+  image: hospital-etl:${ETL_IMAGE_TAG:-1.1.0}
+  environment:
+    DB_HOST: warehouse
+    DB_PORT: "5432"
+    DB_NAME: ${DB_NAME:?Defina DB_NAME en .env}
+    DB_USER: ${DB_USER:?Defina DB_USER en .env}
+    DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
+    ETL_ORCHESTRATOR: docker-compose
+    ETL_ENVIRONMENT: ${ETL_ENVIRONMENT:-desarrollo}
+
+services:
+  warehouse:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:?Defina DB_NAME en .env}
+      POSTGRES_USER: ${DB_USER:?Defina DB_USER en .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en .env}
+    ports:
+      - "${WAREHOUSE_PORT:-5435}:5432"
+    volumes:
+      - warehouse_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migraciones:
+    <<: *etl-base
+    command: ["python", "-m", "src.migrar"]
+    depends_on:
+      warehouse:
+        condition: service_healthy
+
+  etl:
+    <<: *etl-base
+    command: ["python", "-m", "src.ejecutar_pipeline"]
+    depends_on:
+      migraciones:
+        condition: service_completed_successfully
+    volumes:
+      - ./data/raw:/app/data/raw:ro
+      - ./data/processed:/app/data/processed
+      - ./data/rejected:/app/data/rejected
+      - ./logs:/app/logs
+
+volumes:
+  warehouse_data:

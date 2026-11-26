@@ -1,23 +1,97 @@
+"""
+DAG de Airflow del pipeline ETL hospitalario.
 
+Flujo:
+    aplicar_migraciones  >>  ejecutar_pipeline_etl
+
+Ambas tareas usan la misma imagen Docker del motor ETL. Los valores
+específicos del entorno se leen de variables de entorno del scheduler
+(con valores por defecto para el entorno local actual), de modo que
+el archivo no necesita editarse al cambiar de máquina o de proyecto.
+
+Variables de entorno admitidas (definirlas en el docker-compose de Airflow):
+    ETL_PROJECT_PATH     Ruta del proyecto en el host Docker
+    ETL_IMAGE            Imagen del motor ETL (con etiqueta de versión)
+    ETL_DOCKER_NETWORK   Red Docker compartida con el warehouse
+    ETL_AIRFLOW_CONN_ID  Conexión de Airflow con las credenciales del warehouse
+    ETL_ENVIRONMENT      Ambiente (desarrollo, qa, produccion)
+"""
+
+import os
 from datetime import timedelta
 
 import pendulum
-
 from airflow import DAG
 from airflow.providers.docker.operators.docker import DockerOperator
 from docker.types import Mount
-
 
 # --------------------------------------------------
 # CONFIGURACION GENERAL
 # --------------------------------------------------
 
-PROJECT_PATH = (
-    "/mnt/c/Users/User/Documents/"
-    "proyecto_python_data_engineering"
+PIPELINE_VERSION = "1.1.0"
+
+PROJECT_PATH = os.getenv(
+    "ETL_PROJECT_PATH",
+    "/mnt/c/Users/User/Documents/proyecto_python_data_engineering",
 )
 
-DOCKER_NETWORK = "airflow-docker_default"
+IMAGEN_ETL = os.getenv("ETL_IMAGE", f"hospital-etl:{PIPELINE_VERSION}")
+DOCKER_NETWORK = os.getenv("ETL_DOCKER_NETWORK", "airflow-docker_default")
+CONN_ID = os.getenv("ETL_AIRFLOW_CONN_ID", "hospital_dw_etl")
+AMBIENTE = os.getenv("ETL_ENVIRONMENT", "desarrollo")
+
+
+# Credenciales obtenidas de la conexión cifrada de Airflow
+ENTORNO_BD = {
+    "DB_HOST": f"{{{{ conn.{CONN_ID}.host }}}}",
+    "DB_PORT": f"{{{{ conn.{CONN_ID}.port }}}}",
+    "DB_NAME": f"{{{{ conn.{CONN_ID}.schema }}}}",
+    "DB_USER": f"{{{{ conn.{CONN_ID}.login }}}}",
+    "DB_PASSWORD": f"{{{{ conn.{CONN_ID}.password }}}}",
+}
+
+ENTORNO_EJECUCION = {
+    "ETL_ORCHESTRATOR": "airflow",
+    "ETL_PIPELINE_ID": "{{ dag.dag_id }}",
+    "ETL_PIPELINE_VERSION": PIPELINE_VERSION,
+    "ETL_ENVIRONMENT": AMBIENTE,
+}
+
+MONTAJES_DATOS = [
+    Mount(
+        source=f"{PROJECT_PATH}/data/raw",
+        target="/app/data/raw",
+        type="bind",
+        read_only=True,
+    ),
+    Mount(
+        source=f"{PROJECT_PATH}/data/processed",
+        target="/app/data/processed",
+        type="bind",
+    ),
+    Mount(
+        source=f"{PROJECT_PATH}/data/rejected",
+        target="/app/data/rejected",
+        type="bind",
+    ),
+    Mount(
+        source=f"{PROJECT_PATH}/logs",
+        target="/app/logs",
+        type="bind",
+    ),
+]
+
+# Parámetros comunes a todas las tareas Docker
+PARAMETROS_DOCKER = {
+    "image": IMAGEN_ETL,
+    "docker_url": "unix://var/run/docker.sock",
+    "docker_conn_id": None,
+    "network_mode": DOCKER_NETWORK,
+    "auto_remove": "success",
+    "mount_tmp_dir": False,
+    "force_pull": False,
+}
 
 
 # --------------------------------------------------
@@ -31,62 +105,29 @@ with DAG(
     schedule=None,
     catchup=False,
     max_active_runs=1,
+    default_args={
+        "owner": "data-engineering",
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+    },
     tags=["data-engineering", "hospital", "etl", "docker"],
 ) as dag:
 
+    aplicar_migraciones = DockerOperator(
+        task_id="aplicar_migraciones",
+        command=["python", "-m", "src.migrar"],
+        environment={**ENTORNO_BD, **ENTORNO_EJECUCION},
+        execution_timeout=timedelta(minutes=5),
+        **PARAMETROS_DOCKER,
+    )
+
     ejecutar_pipeline = DockerOperator(
         task_id="ejecutar_pipeline_etl",
-
-        # Imagen Docker del motor ETL
-        image="hospital-etl:1.0",
-
-        # Comunicacion con Docker
-        docker_url="unix://var/run/docker.sock",
-        docker_conn_id=None,
-        network_mode=DOCKER_NETWORK,
-
-        # Montaje de directorios
-        mounts=[
-            Mount(
-                source=f"{PROJECT_PATH}/data/raw",
-                target="/app/data/raw",
-                type="bind",
-                read_only=True,
-            ),
-            Mount(
-                source=f"{PROJECT_PATH}/data/processed",
-                target="/app/data/processed",
-                type="bind",
-            ),
-            Mount(
-                source=f"{PROJECT_PATH}/data/rejected",
-                target="/app/data/rejected",
-                type="bind",
-            ),
-            Mount(
-                source=f"{PROJECT_PATH}/logs",
-                target="/app/logs",
-                type="bind",
-            ),
-        ],
-
-        # Credenciales obtenidas de la conexion cifrada de Airflow
-        environment={
-            "DB_HOST": "{{ conn.hospital_dw_etl.host }}",
-            "DB_PORT": "{{ conn.hospital_dw_etl.port }}",
-            "DB_NAME": "{{ conn.hospital_dw_etl.schema }}",
-            "DB_USER": "{{ conn.hospital_dw_etl.login }}",
-            "DB_PASSWORD": "{{ conn.hospital_dw_etl.password }}",
-
-            "ETL_ORCHESTRATOR": "airflow",
-            "ETL_PIPELINE_ID": "{{ dag.dag_id }}",
-            "ETL_PIPELINE_VERSION": "1.0.0",
-            "ETL_ENVIRONMENT": "desarrollo",
-        },
-
-        # Comportamiento del contenedor
-        auto_remove="success",
-        mount_tmp_dir=False,
-        force_pull=False,
+        command=["python", "-m", "src.ejecutar_pipeline"],
+        mounts=MONTAJES_DATOS,
+        environment={**ENTORNO_BD, **ENTORNO_EJECUCION},
         execution_timeout=timedelta(minutes=15),
+        **PARAMETROS_DOCKER,
     )
+
+    aplicar_migraciones >> ejecutar_pipeline

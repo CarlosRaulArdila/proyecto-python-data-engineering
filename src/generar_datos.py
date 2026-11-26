@@ -1,12 +1,17 @@
+"""
+Genera los datos sintéticos de desarrollo en la carpeta raw configurada.
+
+Uso:
+    python -m src.generar_datos
+"""
 
 import pandas as pd
-from pathlib import Path
 
-# Ruta principal del proyecto
-PROJECT_DIR = Path.home() / "Documents" / "proyecto_python_data_engineering"
+from src.configuracion import CONFIG, resolver_ruta
 
-# Carpeta donde guardaremos los archivos originales
-RAW_DIR = PROJECT_DIR / "data" / "raw"
+# Carpeta donde guardaremos los archivos originales (desde config.yaml)
+RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
+RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 # Crear datos ficticios del Hospital 1
 hospital_1 = pd.DataFrame({

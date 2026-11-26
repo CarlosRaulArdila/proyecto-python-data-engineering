@@ -1,75 +1,114 @@
+"""
+Conexión a PostgreSQL.
 
-from pathlib import Path
+El motor (engine) se crea de forma perezosa: importar este módulo
+no exige credenciales ni abre conexiones. Así los tests unitarios
+y las herramientas que solo importan código funcionan sin `.env`.
+
+Prioridad de las credenciales:
+1. Variables de entorno del proceso (Airflow, Docker, CI).
+2. Archivo `.env` en la raíz del proyecto (desarrollo local).
+"""
+
+import logging
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text, URL
+from sqlalchemy import URL, create_engine, text
+from sqlalchemy.engine import Engine
+
+from src.configuracion import BASE_DIR
+
+logger = logging.getLogger(__name__)
+
+# override=False: las variables ya definidas en el entorno
+# (por ejemplo, las que inyecta Airflow) tienen prioridad sobre .env
+load_dotenv(BASE_DIR / ".env", override=False)
+
+VARIABLES_REQUERIDAS = (
+    "DB_HOST",
+    "DB_PORT",
+    "DB_NAME",
+    "DB_USER",
+    "DB_PASSWORD",
+)
+
+_engine: Engine | None = None
 
 
-# 1. Localizar el archivo .env
-BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env")
+def construir_url() -> URL:
+    """Construye la URL de conexión a partir de las variables de entorno."""
 
+    valores = {nombre: os.getenv(nombre) for nombre in VARIABLES_REQUERIDAS}
+    faltantes = [nombre for nombre, valor in valores.items() if not valor]
 
-# 2. Crear el motor de conexión
-def crear_engine():
-
-    DB_HOST = os.getenv("DB_HOST")
-    DB_PORT = os.getenv("DB_PORT")
-    DB_NAME = os.getenv("DB_NAME")
-    DB_USER = os.getenv("DB_USER")
-    DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-    if not all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD]):
+    if faltantes:
         raise ValueError(
-            "Faltan variables de conexión en el archivo .env"
+            "Faltan variables de conexión a PostgreSQL: "
+            + ", ".join(faltantes)
+            + ". Defínalas en el entorno o en el archivo .env "
+            "(ver .env.example)."
         )
 
-    DATABASE_URL = URL.create(
+    return URL.create(
         drivername="postgresql+psycopg2",
-        username=DB_USER,
-        password=DB_PASSWORD,
-        host=DB_HOST,
-        port=int(DB_PORT),
-        database=DB_NAME
-    )
-
-    return create_engine(
-        DATABASE_URL,
-        pool_pre_ping=True
+        username=valores["DB_USER"],
+        password=valores["DB_PASSWORD"],
+        host=valores["DB_HOST"],
+        port=int(valores["DB_PORT"]),
+        database=valores["DB_NAME"],
     )
 
 
-# 3. Crear el motor sin conectarse automáticamente
-engine = crear_engine()
+def obtener_engine() -> Engine:
+    """Devuelve un único engine por proceso, creándolo en la primera llamada."""
+
+    global _engine
+
+    if _engine is None:
+        _engine = create_engine(
+            construir_url(),
+            pool_pre_ping=True,
+            connect_args={
+                "application_name": os.getenv(
+                    "ETL_PIPELINE_ID", "proyecto_python_data_engineering"
+                )
+            },
+        )
+
+    return _engine
 
 
-# 4. Función independiente para comprobar la conexión
-def probar_conexion():
+def cerrar_engine() -> None:
+    """Libera las conexiones del pool (útil al final de un proceso o en tests)."""
+
+    global _engine
+
+    if _engine is not None:
+        _engine.dispose()
+        _engine = None
+
+
+def probar_conexion() -> bool:
+    """Comprueba la conexión e informa la versión de PostgreSQL."""
 
     try:
-        with engine.connect() as connection:
+        engine = obtener_engine()
 
-            resultado = connection.execute(
-                text("SELECT version()")
-            )
+        with engine.connect() as conexion:
+            version = conexion.execute(text("SELECT version()")).scalar()
 
-            version = resultado.scalar()
+        logger.info("Conexión exitosa | Base de datos: %s", engine.url.database)
+        logger.info("PostgreSQL: %s", version)
+        return True
 
-            print("CONEXIÓN EXITOSA")
-            print("Base de datos:", engine.url.database)
-            print("PostgreSQL:", version)
-
-            return True
-
-    except Exception as error:
-
-        print("ERROR DE CONEXIÓN")
-        print(error)
-
+    except Exception:
+        logger.exception("Error de conexión a PostgreSQL")
         return False
 
 
-# 5. Probar la conexión únicamente al ejecutar este archivo
 if __name__ == "__main__":
-    probar_conexion()
+    from src.registro_logs import configurar_logging
+
+    configurar_logging()
+    raise SystemExit(0 if probar_conexion() else 1)

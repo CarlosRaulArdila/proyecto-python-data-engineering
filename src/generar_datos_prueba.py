@@ -1,10 +1,18 @@
+"""
+Genera un archivo de prueba con registros válidos e inválidos.
 
-from pathlib import Path
+Uso:
+    python -m src.generar_datos_prueba
+"""
+
 import pandas as pd
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+from src.configuracion import CONFIG, resolver_ruta
 
-ARCHIVO_SALIDA = BASE_DIR / "data" / "raw" / "datos_prueba.csv"
+RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
+RAW_DIR.mkdir(parents=True, exist_ok=True)
+
+ARCHIVO_SALIDA = RAW_DIR / "datos_prueba.csv"
 
 # Registros sintéticos: dos correctos y tres con errores
 datos = [
@@ -57,7 +65,7 @@ datos = [
 
 df = pd.DataFrame(datos)
 
-df.to_csv(ARCHIVO_SALIDA, index=False)
+df.to_csv(ARCHIVO_SALIDA, index=False, encoding="utf-8-sig")
 
 print("Archivo de prueba generado correctamente.")
 print(f"Registros creados: {len(df)}")
