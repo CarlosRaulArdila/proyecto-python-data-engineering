@@ -28,12 +28,14 @@ RUN pip install -r requirements.txt
 COPY --chown=etl:etl src/ ./src/
 COPY --chown=etl:etl config/ ./config/
 COPY --chown=etl:etl sql/ ./sql/
+COPY --chown=etl:etl pipelines/ ./pipelines/
 
 RUN mkdir -p data/raw data/processed data/rejected logs \
     && chown -R etl:etl /app
 
 USER etl
 
-# Comando por defecto: pipeline completo.
+# Comando por defecto: pipeline completo (config/config.yaml).
 # Migraciones: docker run ... hospital-etl:<version> python -m src.migrar
+# Otro pipeline: docker run -e ETL_CONFIG_PATH=pipelines/ventas/config.yaml ...
 CMD ["python", "-m", "src.ejecutar_pipeline"]

@@ -54,6 +54,25 @@ def validar_configuracion(configuracion: dict) -> None:
     if not configuracion["pipeline"].get("tareas"):
         raise ValueError("config.yaml debe definir pipeline.tareas.")
 
+    columna_fuente = configuracion["pipeline"].get("columna_fuente")
+
+    if not columna_fuente:
+        raise ValueError(
+            "config.yaml debe definir pipeline.columna_fuente: la columna derivada "
+            "donde se guarda el nombre de cada fuente (por ejemplo, hospital_origen)."
+        )
+
+    columnas_esquema = {
+        c.get("nombre"): c for c in configuracion["esquema"].get("columnas", [])
+        if isinstance(c, dict)
+    }
+
+    if not columnas_esquema.get(columna_fuente, {}).get("derivada"):
+        raise ValueError(
+            f"pipeline.columna_fuente ('{columna_fuente}') debe existir en el esquema "
+            "con 'derivada: true'."
+        )
+
     clave = configuracion["pipeline"].get("clave_negocio")
 
     if not isinstance(clave, list) or not clave:

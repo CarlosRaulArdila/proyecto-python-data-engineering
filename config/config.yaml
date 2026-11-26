@@ -16,7 +16,7 @@ proyecto:
 # (comodines, para recibir lotes), por ejemplo:
 #   - nombre: "Hospital 4"
 #     patron: "hospital_4_*.csv"
-# El 'nombre' se guarda en la columna hospital_origen.
+# El 'nombre' se guarda en la columna pipeline.columna_fuente.
 # ============================================================
 
 fuentes:
@@ -171,6 +171,9 @@ archivos:
 pipeline:
   id: "hospital_etl_pipeline"
 
+  # Columna derivada (del esquema) donde se guarda fuentes[].nombre
+  columna_fuente: "hospital_origen"
+
   # Columnas que identifican un registro de negocio.
   # Deben coincidir con el índice único de la tabla destino (V001).
   clave_negocio:
@@ -228,6 +231,17 @@ base_datos:
   # Columna que se marca con la fecha y hora de cada actualización
   # (debe existir en la tabla; ver migración V003). Omitir si no se usa.
   columna_actualizacion: "fecha_actualizacion"
+
+
+# ============================================================
+# MIGRACIONES
+# ------------------------------------------------------------
+# Directorio con los archivos V<NNN>__<descripcion>.sql de este
+# proyecto. El historial se guarda en <base_datos.esquema>.etl_migraciones.
+# ============================================================
+
+migraciones:
+  directorio: "sql/migraciones"
 
 
 # ============================================================

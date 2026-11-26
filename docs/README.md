@@ -13,6 +13,7 @@ Plantilla modular y reutilizable para construir pipelines de Ingeniería de Dato
 | [Configuración](configuracion.md) | Configuración YAML, variables de entorno y conexiones |
 | [Despliegue](despliegue.md) | Construcción de imagen Docker y despliegue con Airflow |
 | [Operación](operacion.md) | Ejecución, supervisión, auditoría y mantenimiento |
+| [Nuevo pipeline](nuevo_pipeline.md) | Cómo crear un pipeline de otro dominio solo con configuración |
 | [Cambios](../CHANGELOG.md) | Historial de versiones |
 
 ## Orden recomendado de lectura

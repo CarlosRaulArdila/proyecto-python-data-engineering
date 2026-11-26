@@ -28,3 +28,21 @@ def test_seccion_faltante():
 def test_configuracion_del_proyecto_es_valida():
 
     validar_configuracion(CONFIG)
+
+
+def test_columna_fuente_obligatoria():
+
+    config = copy.deepcopy(CONFIG)
+    del config["pipeline"]["columna_fuente"]
+
+    with pytest.raises(ValueError, match="columna_fuente"):
+        validar_configuracion(config)
+
+
+def test_columna_fuente_debe_ser_derivada():
+
+    config = copy.deepcopy(CONFIG)
+    config["pipeline"]["columna_fuente"] = "especialidad"
+
+    with pytest.raises(ValueError, match="derivada: true"):
+        validar_configuracion(config)

@@ -37,6 +37,14 @@ y versionado semántico.
     etapas anteriores terminaron bien; si la carga falla se reintentan.
   - Las etapas pueden recibir el contexto de la ejecución (`run_id`, `pipeline_id`,
     errores previos) declarando un parámetro.
+- **Multi-proyecto: pipeline de ejemplo de ventas** (`pipelines/ventas/`), creado solo con
+  configuración, migraciones y datos, sin código Python nuevo. Guía en `docs/nuevo_pipeline.md`.
+  - `pipeline.columna_fuente`: nombre de la columna derivada con la fuente (antes
+    `hospital_origen` fijo en el código).
+  - `migraciones.directorio`: cada proyecto tiene sus migraciones, y su historial en
+    `<base_datos.esquema>.etl_migraciones`. `src.migrar` crea el esquema si no existe.
+  - Marcador `{{esquema}}` en los archivos SQL de migración.
+  - La imagen Docker incluye `pipelines/`; se elige el pipeline con `ETL_CONFIG_PATH`.
 - `src/sql_utils.py`: validación estricta de nombres de tablas y columnas antes de
   usarlos en SQL (los nombres del esquema deben ser identificadores en minúsculas).
 

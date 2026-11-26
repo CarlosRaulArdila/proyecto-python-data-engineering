@@ -33,9 +33,17 @@ logger = logging.getLogger(__name__)
 RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
 PROCESSED_DIR = resolver_ruta(CONFIG["rutas"]["processed"])
 
+# Columna derivada donde se guarda el nombre de la fuente de cada registro
+COLUMNA_FUENTE = CONFIG["pipeline"]["columna_fuente"]
 
-def leer_fuente(ruta: Path, fuente: str, esquema: Esquema | None = None) -> pd.DataFrame:
-    """Lee un archivo de origen y añade la columna hospital_origen."""
+
+def leer_fuente(
+    ruta: Path,
+    fuente: str,
+    esquema: Esquema | None = None,
+    columna_fuente: str | None = None,
+) -> pd.DataFrame:
+    """Lee un archivo de origen y añade la columna con el nombre de la fuente."""
 
     # Sin esquema se lee todo como texto: nunca se pierden ceros iniciales
     dtypes = esquema.dtypes_lectura() if esquema else str
@@ -45,7 +53,7 @@ def leer_fuente(ruta: Path, fuente: str, esquema: Esquema | None = None) -> pd.D
     if esquema:
         df = esquema.ajustar_columnas_fuente(df, ruta.name).copy()
 
-    df["hospital_origen"] = fuente
+    df[columna_fuente or COLUMNA_FUENTE] = fuente
 
     return df
 
@@ -56,7 +64,8 @@ def consolidar_datos(
     esquema: Esquema | None = None,
 ) -> pd.DataFrame:
     """
-    Lee los archivos CSV indicados y los consolida en un único DataFrame.
+    Lee los archivos CSV indicados y los consolida en un único DataFrame,
+    añadiendo la columna de la fuente (pipeline.columna_fuente).
 
     archivos: {nombre_archivo: nombre_fuente}
     esquema:  si se indica, se usan sus tipos de lectura y se exige que

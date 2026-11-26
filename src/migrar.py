@@ -1,15 +1,22 @@
 """
 Aplicador de migraciones SQL versionadas.
 
-Ejecuta, en orden, los archivos sql/migraciones/V<NNN>__<descripcion>.sql
-que todavía no se hayan aplicado, y registra cada uno en la tabla
-public.etl_migraciones (versión, nombre, checksum y fecha).
+Ejecuta, en orden, los archivos V<NNN>__<descripcion>.sql del directorio
+configurado (migraciones.directorio, por defecto sql/migraciones) que
+todavía no se hayan aplicado, y registra cada uno en la tabla
+<base_datos.esquema>.etl_migraciones (versión, nombre, checksum y fecha).
+
+Cada proyecto tiene su propio esquema de PostgreSQL y su propio historial
+de migraciones. Dentro de los archivos SQL puede usarse el marcador
+{{esquema}}, que se reemplaza por base_datos.esquema; así una misma
+migración sirve para cualquier proyecto.
 
 Características:
 - Idempotente: volver a ejecutarlo no hace nada si no hay migraciones nuevas.
 - Cada migración se aplica en su propia transacción.
 - Bloqueo consultivo (advisory lock) para evitar ejecuciones simultáneas.
 - Detecta si un archivo ya aplicado fue modificado (checksum distinto).
+- Crea el esquema del proyecto si no existe.
 
 Uso:
     python -m src.migrar
@@ -24,19 +31,27 @@ from pathlib import Path
 from sqlalchemy import text
 
 from src.conexion_db import cerrar_engine, obtener_engine
-from src.configuracion import BASE_DIR
+from src.configuracion import CONFIG, resolver_ruta
+from src.sql_utils import validar_identificador
 
 logger = logging.getLogger(__name__)
 
-DIRECTORIO_MIGRACIONES = BASE_DIR / "sql" / "migraciones"
+DIRECTORIO_MIGRACIONES = resolver_ruta(
+    CONFIG.get("migraciones", {}).get("directorio", "sql/migraciones")
+)
+
+ESQUEMA_BD = validar_identificador(CONFIG["base_datos"]["esquema"], "Esquema de base de datos")
+TABLA_CONTROL = f"{ESQUEMA_BD}.etl_migraciones"
+
+MARCADOR_ESQUEMA = "{{esquema}}"
 
 PATRON_ARCHIVO = re.compile(r"^V(\d+)__([\w\-]+)\.sql$")
 
 # Identificador arbitrario del bloqueo consultivo de migraciones
 ID_BLOQUEO = 7_301_202_601
 
-SQL_TABLA_CONTROL = """
-CREATE TABLE IF NOT EXISTS public.etl_migraciones (
+SQL_TABLA_CONTROL = f"""
+CREATE TABLE IF NOT EXISTS {TABLA_CONTROL} (
     version           INTEGER      PRIMARY KEY,
     nombre            VARCHAR(200) NOT NULL,
     checksum          CHAR(64)     NOT NULL,
@@ -53,7 +68,7 @@ class Migracion:
 
     @property
     def sql(self) -> str:
-        return self.ruta.read_text(encoding="utf-8")
+        return self.ruta.read_text(encoding="utf-8").replace(MARCADOR_ESQUEMA, ESQUEMA_BD)
 
     @property
     def checksum(self) -> str:
@@ -63,8 +78,13 @@ class Migracion:
         return hashlib.sha256(contenido).hexdigest()
 
 
-def listar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[Migracion]:
+def listar_migraciones(directorio: Path | None = None) -> list[Migracion]:
     """Devuelve las migraciones del directorio ordenadas por versión."""
+
+    directorio = directorio or DIRECTORIO_MIGRACIONES
+
+    if not directorio.is_dir():
+        raise FileNotFoundError(f"No existe el directorio de migraciones: {directorio}")
 
     migraciones = []
 
@@ -96,9 +116,10 @@ def listar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[Migrac
     return migraciones
 
 
-def aplicar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[int]:
+def aplicar_migraciones(directorio: Path | None = None) -> list[int]:
     """Aplica las migraciones pendientes. Devuelve las versiones aplicadas."""
 
+    directorio = directorio or DIRECTORIO_MIGRACIONES
     migraciones = listar_migraciones(directorio)
     engine = obtener_engine()
     aplicadas_ahora = []
@@ -114,8 +135,18 @@ def aplicar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[int]:
             # usuario de servicio sin permisos de DDL puede ejecutar este paso
             # cuando no hay migraciones pendientes (por ejemplo, desde Airflow).
             with conexion.begin():
+                existe_esquema = conexion.execute(
+                    text("SELECT to_regnamespace(:esquema) IS NOT NULL"),
+                    {"esquema": ESQUEMA_BD},
+                ).scalar()
+
+                if not existe_esquema:
+                    logger.info("Creando el esquema %s", ESQUEMA_BD)
+                    conexion.execute(text(f"CREATE SCHEMA {ESQUEMA_BD}"))
+
                 existe_control = conexion.execute(
-                    text("SELECT to_regclass('public.etl_migraciones') IS NOT NULL")
+                    text("SELECT to_regclass(:tabla) IS NOT NULL"),
+                    {"tabla": TABLA_CONTROL},
                 ).scalar()
 
                 if not existe_control:
@@ -125,7 +156,7 @@ def aplicar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[int]:
                 registradas = {
                     fila.version: fila.checksum
                     for fila in conexion.execute(
-                        text("SELECT version, checksum FROM public.etl_migraciones")
+                        text(f"SELECT version, checksum FROM {TABLA_CONTROL}")
                     )
                 }
 
@@ -147,7 +178,7 @@ def aplicar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[int]:
                     conexion.exec_driver_sql(migracion.sql)
                     conexion.execute(
                         text(
-                            "INSERT INTO public.etl_migraciones "
+                            f"INSERT INTO {TABLA_CONTROL} "
                             "(version, nombre, checksum) "
                             "VALUES (:version, :nombre, :checksum)"
                         ),
@@ -163,6 +194,8 @@ def aplicar_migraciones(directorio: Path = DIRECTORIO_MIGRACIONES) -> list[int]:
         finally:
             conexion.execute(text("SELECT pg_advisory_unlock(:id)"), {"id": ID_BLOQUEO})
             conexion.commit()
+
+    logger.info("Directorio: %s | Control: %s", directorio, TABLA_CONTROL)
 
     if aplicadas_ahora:
         logger.info("Migraciones aplicadas: %s", aplicadas_ahora)

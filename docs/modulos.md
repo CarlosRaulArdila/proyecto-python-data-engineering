@@ -14,7 +14,7 @@ del proyecto con `python -m src.<modulo>`.
 | `sql_utils.py` | Validación de identificadores SQL (tablas y columnas) generados desde la configuración. |
 | `ingesta.py` | Descubrimiento de archivos por `archivo` o `patron`, hash SHA-256, modo incremental, manifiesto de la ejecución y etapa final `registrar_ingesta` (linaje en `etl_archivos_procesados`). |
 | `registro_logs.py` | Configura los logs a consola y a archivo rotativo, con el `run_id` en cada línea. |
-| `migrar.py` | Aplica las migraciones SQL versionadas de `sql/migraciones/` y las registra en `public.etl_migraciones`. |
+| `migrar.py` | Aplica las migraciones del directorio configurado (`migraciones.directorio`), reemplaza `{{esquema}}`, crea el esquema si no existe y registra el historial en `<esquema>.etl_migraciones`. |
 | `crear_tabla.py` | **Obsoleto.** Se conserva por compatibilidad y delega en `migrar.py`. |
 
 ## 2. Etapas del pipeline

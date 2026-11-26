@@ -1,0 +1,6 @@
+pedido_id,fecha,cliente_id,producto,categoria,cantidad,precio_unitario,canal
+PED-100001,2026-11-24,C0101,Libro de cocina,Libros,3,45000,tienda
+PED-100002,2026-11-24,C0102,Monitor 27 pulgadas,Tecnologia,1,1250000,telefono
+PED-10003,2026-11-24,C0103,Lámpara de escritorio,Hogar,2,85000,web
+PED-100004,2026-11-24,C0104,Rompecabezas,Juguetes,1,60000,web
+PED-100005,2026-11-24,C0105,Mouse inalámbrico,Tecnologia,4,55000,fax
