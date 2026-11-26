@@ -11,6 +11,7 @@ Ejemplo en config.yaml:
       columnas:
         - nombre: "numero_historia"
           tipo: "texto"
+          etiqueta: "Número de historia"   # usado en los mensajes
           longitud_max: 20
         - nombre: "edad"
           tipo: "entero"
@@ -30,7 +31,15 @@ logger = logging.getLogger(__name__)
 
 TIPOS_ADMITIDOS = {"texto", "entero", "decimal", "fecha", "booleano"}
 
-CLAVES_COLUMNA = {"nombre", "tipo", "obligatoria", "derivada", "longitud_max", "descripcion"}
+CLAVES_COLUMNA = {
+    "nombre",
+    "tipo",
+    "etiqueta",
+    "obligatoria",
+    "derivada",
+    "longitud_max",
+    "descripcion",
+}
 
 
 @dataclass(frozen=True)
@@ -41,6 +50,7 @@ class Columna:
     derivada: bool = False
     longitud_max: int | None = None
     descripcion: str | None = None
+    etiqueta: str | None = None  # nombre legible para los mensajes de validación
 
 
 @dataclass(frozen=True)

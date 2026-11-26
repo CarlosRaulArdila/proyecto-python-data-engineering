@@ -14,11 +14,20 @@ y versionado semántico.
   - Las columnas de la fuente que no están en el esquema se descartan con un aviso.
   - Solo las columnas obligatorias determinan si un registro está incompleto.
   - La conversión de tipos antes de la carga se hace según el esquema.
+- **Reglas de negocio en `config.yaml`** (sección `reglas`) con el motor `src/reglas.py`:
+  - Tipos: `rango` (con límites inclusivos o exclusivos), `valores_permitidos` y `patron`.
+  - Reglas automáticas desde el esquema: obligatoria, tipo (fecha, entero, decimal)
+    y `longitud_max`.
+  - La configuración se valida al iniciar (columna inexistente, tipo desconocido,
+    parámetros faltantes, regex inválida, rango sobre columna no numérica).
+  - Propiedad `etiqueta` en el esquema para los mensajes de rechazo.
 
 ### Cambiado
 - Los textos compuestos solo por espacios cuentan como vacíos en la limpieza.
 - Ya no hay nombres ni tipos de columnas escritos en el código del motor
   (`dtype={"numero_historia": str}`, `COLUMNAS_ENTERAS`).
+- La validación es vectorizada: 200 000 registros en ~0,4 s (antes ~47 s con `iterrows`).
+- Las listas de especialidades y técnicas anestésicas pasan de `validar_reglas.py` a `config.yaml`.
 
 ## [1.1.0] - 2026-11-25 - Fase 1: estabilización
 
