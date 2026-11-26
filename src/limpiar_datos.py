@@ -28,9 +28,7 @@ OUTPUT_CONFLICTOS = REJECTED_DIR / ARCHIVOS.get(
 )
 
 # Columnas que identifican un registro de negocio (misma clave del UPSERT)
-CLAVE_NEGOCIO = CONFIG["pipeline"].get(
-    "clave_negocio", ["numero_historia", "fecha", "hospital_origen"]
-)
+CLAVE_NEGOCIO = CONFIG["pipeline"]["clave_negocio"]
 
 
 def detectar_vacios(df):

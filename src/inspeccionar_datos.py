@@ -18,7 +18,7 @@ def inspeccionar(raw_dir=RAW_DIR):
         print(f"ARCHIVO: {archivo.name}")
         print("=" * 50)
 
-        df = pd.read_csv(archivo, dtype={"numero_historia": str}, encoding="utf-8-sig")
+        df = pd.read_csv(archivo, dtype=str, encoding="utf-8-sig")
 
         print(f"\nNúmero de registros: {df.shape[0]}")
         print(f"Número de columnas: {df.shape[1]}")

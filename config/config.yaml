@@ -189,6 +189,16 @@ base_datos:
   tabla_destino: "hospital_registros"
   tabla_auditoria: "etl_auditoria"
 
+  # El UPSERT se genera desde el esquema y pipeline.clave_negocio:
+  # inserta todas las columnas del esquema y, si la clave ya existe,
+  # actualiza las demás solo cuando cambian.
+  # Opcional: limitar qué columnas se actualizan.
+  # columnas_actualizables: ["edad", "especialidad"]
+
+  # Columna que se marca con la fecha y hora de cada actualización
+  # (debe existir en la tabla; ver migración V003). Omitir si no se usa.
+  columna_actualizacion: "fecha_actualizacion"
+
 
 # ============================================================
 # CONFIGURACIÓN DE LOGS

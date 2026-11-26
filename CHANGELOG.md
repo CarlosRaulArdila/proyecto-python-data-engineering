@@ -21,6 +21,14 @@ y versionado semántico.
   - La configuración se valida al iniciar (columna inexistente, tipo desconocido,
     parámetros faltantes, regex inválida, rango sobre columna no numérica).
   - Propiedad `etiqueta` en el esquema para los mensajes de rechazo.
+- **UPSERT generado desde la configuración** (`cargar_incremental.py`):
+  columnas del esquema, `ON CONFLICT` sobre `pipeline.clave_negocio`, actualización
+  de las demás columnas solo si cambian (o de `base_datos.columnas_actualizables`)
+  y `base_datos.columna_actualizacion` opcional. Sin columnas actualizables usa `DO NOTHING`.
+- Verificación previa de la tabla destino: si no existe o le faltan columnas del
+  esquema, el pipeline falla con un mensaje que indica cuáles.
+- `src/sql_utils.py`: validación estricta de nombres de tablas y columnas antes de
+  usarlos en SQL (los nombres del esquema deben ser identificadores en minúsculas).
 
 ### Cambiado
 - Los textos compuestos solo por espacios cuentan como vacíos en la limpieza.
@@ -28,6 +36,9 @@ y versionado semántico.
   (`dtype={"numero_historia": str}`, `COLUMNAS_ENTERAS`).
 - La validación es vectorizada: 200 000 registros en ~0,4 s (antes ~47 s con `iterrows`).
 - Las listas de especialidades y técnicas anestésicas pasan de `validar_reglas.py` a `config.yaml`.
+- La auditoría usa `base_datos.tabla_auditoria` en lugar de `public.etl_auditoria` fijo.
+- `pipeline.clave_negocio` es obligatoria y se valida al cargar la configuración.
+- Sin esquema, la lectura de CSV trata todo como texto (antes solo `numero_historia`).
 
 ## [1.1.0] - 2026-11-25 - Fase 1: estabilización
 

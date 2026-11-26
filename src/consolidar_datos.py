@@ -32,7 +32,8 @@ def consolidar_datos(
               cada fuente tenga sus columnas (las sobrantes se descartan).
     """
 
-    dtypes = esquema.dtypes_lectura() if esquema else {"numero_historia": str}
+    # Sin esquema se lee todo como texto: nunca se pierden ceros iniciales
+    dtypes = esquema.dtypes_lectura() if esquema else str
 
     lista_fuentes = []
 

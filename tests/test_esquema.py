@@ -52,6 +52,7 @@ def test_esquema_del_proyecto_es_valido():
         ([{"nombre": "a", "tipo": "texto"}, {"nombre": "a", "tipo": "texto"}], "duplicada"),
         ([{"nombre": "a", "tipo": "texto", "obligatorio": True}], "propiedades desconocidas"),
         ([], "lista 'columnas'"),
+        ([{"nombre": "Fecha Alta", "tipo": "fecha"}], "Nombre de columna"),
     ],
 )
 def test_definiciones_invalidas(columnas, mensaje):

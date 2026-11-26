@@ -29,7 +29,7 @@ Entre sus configuraciones se encuentran:
 | `pipeline.clave_negocio` | Columnas que identifican un registro; deben coincidir con el índice único de la tabla destino. |
 | `pipeline.tareas` | Etapas en orden: `nombre`, `modulo` y `funcion`. |
 | `pipeline.detener_si_falla` | `true`: se detiene en el primer fallo (FALLIDO). `false`: continúa y termina como PARCIAL. |
-| `base_datos` | Esquema, tabla destino y tabla de auditoría. |
+| `base_datos` | Esquema, tabla destino, tabla de auditoría y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
 | `logging` | Archivo, nivel, rotación y formato (incluye `run_id`). |
 
 Para usar otra configuración sin modificar el archivo del repositorio,

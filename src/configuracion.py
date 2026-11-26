@@ -54,6 +54,13 @@ def validar_configuracion(configuracion: dict) -> None:
     if not configuracion["pipeline"].get("tareas"):
         raise ValueError("config.yaml debe definir pipeline.tareas.")
 
+    clave = configuracion["pipeline"].get("clave_negocio")
+
+    if not isinstance(clave, list) or not clave:
+        raise ValueError(
+            "config.yaml debe definir pipeline.clave_negocio como una lista de columnas."
+        )
+
 
 def cargar_configuracion(ruta: Path | None = None) -> dict:
     """Carga la configuración general del proyecto desde un archivo YAML."""

@@ -27,6 +27,8 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+from src.sql_utils import validar_identificador
+
 logger = logging.getLogger(__name__)
 
 TIPOS_ADMITIDOS = {"texto", "entero", "decimal", "fecha", "booleano"}
@@ -199,6 +201,8 @@ def construir_esquema(definicion: dict) -> Esquema:
                 f"La columna '{item['nombre']}' tiene propiedades desconocidas: "
                 f"{sorted(desconocidas)}. Permitidas: {sorted(CLAVES_COLUMNA)}"
             )
+
+        validar_identificador(item["nombre"], "Nombre de columna del esquema")
 
         if item["tipo"] not in TIPOS_ADMITIDOS:
             raise ValueError(
