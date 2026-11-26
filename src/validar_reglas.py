@@ -8,6 +8,7 @@ import logging
 import pandas as pd
 
 from src.configuracion import CONFIG, resolver_ruta
+from src.esquema import obtener_esquema
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,9 @@ def ejecutar_validacion() -> dict:
         )
 
     df = pd.read_csv(
-        ARCHIVO_ENTRADA, dtype={"numero_historia": str}, encoding="utf-8-sig"
+        ARCHIVO_ENTRADA,
+        dtype=obtener_esquema(CONFIG).dtypes_lectura(),
+        encoding="utf-8-sig",
     )
 
     df_validos, df_rechazados = validar_datos(df)

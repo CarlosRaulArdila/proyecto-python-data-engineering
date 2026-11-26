@@ -25,6 +25,53 @@ fuentes:
 
 
 # ============================================================
+# ESQUEMA (CONTRATO DE DATOS)
+# ------------------------------------------------------------
+# Columnas que maneja el pipeline, en orden.
+#   tipo:         texto | entero | decimal | fecha | booleano
+#   obligatoria:  si está vacía, el registro se rechaza como
+#                 incompleto (por defecto: true)
+#   derivada:     la añade el pipeline; no se exige en la fuente
+#   longitud_max: longitud máxima para columnas de texto
+# Las columnas de las fuentes que no estén aquí se descartan
+# con un aviso en el log.
+# ============================================================
+
+esquema:
+  columnas:
+    - nombre: "numero_historia"
+      tipo: "texto"
+      longitud_max: 20
+      descripcion: "Número de historia clínica"
+
+    - nombre: "fecha"
+      tipo: "fecha"
+      descripcion: "Fecha del procedimiento"
+
+    - nombre: "edad"
+      tipo: "entero"
+      descripcion: "Edad del paciente en años"
+
+    - nombre: "especialidad"
+      tipo: "texto"
+      longitud_max: 50
+
+    - nombre: "tecnica_anestesica"
+      tipo: "texto"
+      longitud_max: 50
+
+    - nombre: "duracion_minutos"
+      tipo: "entero"
+      descripcion: "Duración del procedimiento en minutos"
+
+    - nombre: "hospital_origen"
+      tipo: "texto"
+      longitud_max: 100
+      derivada: true
+      descripcion: "Nombre de la fuente (fuentes[].nombre)"
+
+
+# ============================================================
 # RUTAS DEL PROYECTO
 # ============================================================
 

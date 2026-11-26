@@ -3,6 +3,23 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y versionado semántico.
 
+## [Sin publicar] - Fase 2: plantilla reutilizable
+
+### Añadido
+- **Esquema (contrato de datos) en `config.yaml`**: columnas, tipo (`texto`, `entero`,
+  `decimal`, `fecha`, `booleano`), obligatoriedad, longitud máxima y columnas derivadas.
+  Módulo `src/esquema.py`.
+  - Cada fuente debe tener las columnas del esquema; si falta alguna, el pipeline falla
+    indicando el archivo y la columna.
+  - Las columnas de la fuente que no están en el esquema se descartan con un aviso.
+  - Solo las columnas obligatorias determinan si un registro está incompleto.
+  - La conversión de tipos antes de la carga se hace según el esquema.
+
+### Cambiado
+- Los textos compuestos solo por espacios cuentan como vacíos en la limpieza.
+- Ya no hay nombres ni tipos de columnas escritos en el código del motor
+  (`dtype={"numero_historia": str}`, `COLUMNAS_ENTERAS`).
+
 ## [1.1.0] - 2026-11-25 - Fase 1: estabilización
 
 ### Añadido

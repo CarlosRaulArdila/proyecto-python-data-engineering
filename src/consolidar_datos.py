@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.configuracion import CONFIG, resolver_ruta
+from src.esquema import Esquema, obtener_esquema
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +18,21 @@ RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
 PROCESSED_DIR = resolver_ruta(CONFIG["rutas"]["processed"])
 
 
-def consolidar_datos(archivos: dict[str, str], raw_dir: Path) -> pd.DataFrame:
+def consolidar_datos(
+    archivos: dict[str, str],
+    raw_dir: Path,
+    esquema: Esquema | None = None,
+) -> pd.DataFrame:
     """
     Lee los archivos CSV de las fuentes y los consolida en un único
     DataFrame, añadiendo la columna hospital_origen.
 
     archivos: {nombre_archivo: nombre_fuente}
+    esquema:  si se indica, se usan sus tipos de lectura y se exige que
+              cada fuente tenga sus columnas (las sobrantes se descartan).
     """
+
+    dtypes = esquema.dtypes_lectura() if esquema else {"numero_historia": str}
 
     lista_fuentes = []
 
@@ -33,11 +42,10 @@ def consolidar_datos(archivos: dict[str, str], raw_dir: Path) -> pd.DataFrame:
         if not ruta.exists():
             raise FileNotFoundError(f"No se encontró el archivo: {ruta}")
 
-        df = pd.read_csv(
-            ruta,
-            dtype={"numero_historia": str},
-            encoding="utf-8-sig",
-        )
+        df = pd.read_csv(ruta, dtype=dtypes, encoding="utf-8-sig")
+
+        if esquema:
+            df = esquema.ajustar_columnas_fuente(df, archivo).copy()
 
         df["hospital_origen"] = fuente
         lista_fuentes.append(df)
@@ -80,7 +88,7 @@ def ejecutar_consolidacion() -> dict:
             ", ".join(no_configurados),
         )
 
-    df_consolidado = consolidar_datos(archivos, RAW_DIR)
+    df_consolidado = consolidar_datos(archivos, RAW_DIR, obtener_esquema(CONFIG))
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     ruta_salida = PROCESSED_DIR / CONFIG["archivos"]["consolidados"]

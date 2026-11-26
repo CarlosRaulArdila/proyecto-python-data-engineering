@@ -98,3 +98,29 @@ def test_conflicto_clave_columnas_faltantes():
 
     with pytest.raises(ValueError, match="clave de negocio"):
         separar_conflictos_clave(datos, CLAVE)
+
+
+def test_solo_columnas_obligatorias_marcan_incompleto():
+    # "observaciones" es opcional: vacía no debe rechazar el registro
+    datos = pd.DataFrame({
+        "numero_historia": ["001", "002"],
+        "edad": [35, None],
+        "observaciones": [None, "ok"],
+    })
+
+    df_limpio, df_incompletos, _ = limpiar_datos(datos, ["numero_historia", "edad"])
+
+    assert df_limpio["numero_historia"].tolist() == ["001"]
+    assert df_incompletos["numero_historia"].tolist() == ["002"]
+
+
+def test_texto_solo_con_espacios_es_incompleto():
+    datos = pd.DataFrame({
+        "numero_historia": ["001", "   "],
+        "edad": [35, 40],
+    })
+
+    df_limpio, df_incompletos, _ = limpiar_datos(datos)
+
+    assert len(df_limpio) == 1
+    assert len(df_incompletos) == 1

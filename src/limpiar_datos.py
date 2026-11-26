@@ -8,6 +8,7 @@ import logging
 import pandas as pd
 
 from src.configuracion import CONFIG, resolver_ruta
+from src.esquema import obtener_esquema
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +33,32 @@ CLAVE_NEGOCIO = CONFIG["pipeline"].get(
 )
 
 
-def limpiar_datos(df):
+def detectar_vacios(df):
+    """Marca como vacío un valor nulo o un texto compuesto solo por espacios."""
+
+    vacios = df.isna()
+
+    for columna in df.columns:
+        serie = df[columna]
+
+        if pd.api.types.is_object_dtype(serie) or pd.api.types.is_string_dtype(serie):
+            vacios[columna] = vacios[columna] | serie.astype(str).str.strip().eq("")
+
+    return vacios
+
+
+def limpiar_datos(df, columnas_obligatorias=None):
     """
     Separa los registros incompletos, detecta duplicados
     exactos y devuelve los registros limpios.
+
+    columnas_obligatorias: columnas que no pueden estar vacías. Si no se
+    indica, se consideran todas (comportamiento original).
     """
 
-    # Separar registros incompletos
-    mascara_incompletos = df.isna().any(axis=1)
+    # Separar registros incompletos (vacíos o solo espacios)
+    columnas = list(columnas_obligatorias) if columnas_obligatorias else list(df.columns)
+    mascara_incompletos = detectar_vacios(df[columnas]).any(axis=1)
 
     df_incompletos = df.loc[mascara_incompletos].copy()
     df_completos = df.loc[~mascara_incompletos].copy()
@@ -93,9 +112,11 @@ def ejecutar_limpieza() -> dict:
     if not INPUT_FILE.exists():
         raise FileNotFoundError(f"No se encontró el archivo consolidado: {INPUT_FILE}")
 
-    df = pd.read_csv(INPUT_FILE, dtype={"numero_historia": str}, encoding="utf-8-sig")
+    esquema = obtener_esquema(CONFIG)
 
-    df_limpio, df_incompletos, df_duplicados = limpiar_datos(df)
+    df = pd.read_csv(INPUT_FILE, dtype=esquema.dtypes_lectura(), encoding="utf-8-sig")
+
+    df_limpio, df_incompletos, df_duplicados = limpiar_datos(df, esquema.obligatorias)
     df_limpio, df_conflictos = separar_conflictos_clave(df_limpio, CLAVE_NEGOCIO)
 
     salidas = {

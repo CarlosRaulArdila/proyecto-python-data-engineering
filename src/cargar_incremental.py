@@ -18,6 +18,7 @@ from sqlalchemy import text
 
 from src.conexion_db import obtener_engine
 from src.configuracion import CONFIG, resolver_ruta
+from src.esquema import Esquema, obtener_esquema
 
 logger = logging.getLogger(__name__)
 
@@ -32,29 +33,20 @@ TABLA_CONFIGURADA = f"{ESQUEMA_DESTINO}.{TABLA_DESTINO}"
 # Solo se permiten identificadores simples esquema.tabla (evita inyección SQL)
 PATRON_TABLA = re.compile(r"^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$")
 
-COLUMNAS_ENTERAS = ("edad", "duracion_minutos")
-
-
-def preparar_datos(ruta_archivo):
-    """Lee el archivo validado y normaliza los tipos para PostgreSQL."""
+def preparar_datos(ruta_archivo, esquema: Esquema | None = None):
+    """
+    Lee el archivo validado y convierte cada columna al tipo declarado
+    en el esquema (fechas, enteros como 33.0 -> 33, etc.).
+    """
 
     if not ruta_archivo.exists():
         raise FileNotFoundError(f"No se encontró el archivo validado: {ruta_archivo}")
 
-    df = pd.read_csv(
-        ruta_archivo,
-        dtype={"numero_historia": str},
-        encoding="utf-8-sig",
-    )
+    esquema = esquema or obtener_esquema(CONFIG)
 
-    df["fecha"] = pd.to_datetime(df["fecha"]).dt.date
+    df = pd.read_csv(ruta_archivo, dtype=esquema.dtypes_lectura(), encoding="utf-8-sig")
 
-    # Los CSV con vacíos guardan los enteros como 33.0: se normalizan a int
-    for columna in COLUMNAS_ENTERAS:
-        if columna in df.columns:
-            df[columna] = pd.to_numeric(df[columna]).astype("int64")
-
-    return df
+    return esquema.convertir_tipos(df)
 
 
 def construir_consulta(tabla, tablas_permitidas=None):

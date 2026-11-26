@@ -21,6 +21,7 @@ RUTA_CONFIG_POR_DEFECTO = BASE_DIR / "config" / "config.yaml"
 SECCIONES_REQUERIDAS = (
     "proyecto",
     "fuentes",
+    "esquema",
     "rutas",
     "archivos",
     "pipeline",
