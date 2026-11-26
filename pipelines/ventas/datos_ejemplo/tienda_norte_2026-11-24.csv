@@ -1,0 +1,6 @@
+pedido_id,fecha,cliente_id,producto,categoria,cantidad,precio_unitario,canal
+PED-000001,2026-11-24,C0001,Teclado mecánico,Tecnologia,2,189900.00,web
+PED-000002,2026-11-24,C0002,Silla ergonómica,Hogar,1,650000,tienda
+PED-000003,2026-11-24,C0003,Cafetera,Hogar,1,,web
+PED-000004,2026-11-24,C0004,Audífonos,Tecnologia,0,99000,web
+PED-000002,2026-11-24,C0002,Silla ergonómica,Hogar,1,650000,tienda

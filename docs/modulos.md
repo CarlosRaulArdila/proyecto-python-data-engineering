@@ -9,8 +9,12 @@ del proyecto con `python -m src.<modulo>`.
 |---|---|
 | `configuracion.py` | Carga y valida `config/config.yaml` (o el archivo indicado en `ETL_CONFIG_PATH`). Resuelve rutas relativas desde la raíz del proyecto. |
 | `conexion_db.py` | Crea de forma perezosa un único engine de SQLAlchemy por proceso (`obtener_engine`) y lo libera (`cerrar_engine`). Importarlo no exige credenciales. |
+| `esquema.py` | Esquema (contrato de datos) declarado en `config.yaml`: tipos, obligatoriedad, columnas derivadas, verificación de fuentes y conversión de tipos. |
+| `reglas.py` | Motor de reglas vectorizado: reglas automáticas del esquema y reglas de negocio de `config.yaml` (`rango`, `valores_permitidos`, `patron`). Extensible registrando nuevos tipos en `TIPOS_REGLA`. |
+| `sql_utils.py` | Validación de identificadores SQL (tablas y columnas) generados desde la configuración. |
+| `ingesta.py` | Descubrimiento de archivos por `archivo` o `patron`, hash SHA-256, modo incremental, manifiesto de la ejecución y etapa final `registrar_ingesta` (linaje en `etl_archivos_procesados`). |
 | `registro_logs.py` | Configura los logs a consola y a archivo rotativo, con el `run_id` en cada línea. |
-| `migrar.py` | Aplica las migraciones SQL versionadas de `sql/migraciones/` y las registra en `public.etl_migraciones`. |
+| `migrar.py` | Aplica las migraciones del directorio configurado (`migraciones.directorio`), reemplaza `{{esquema}}`, crea el esquema si no existe y registra el historial en `<esquema>.etl_migraciones`. |
 | `crear_tabla.py` | **Obsoleto.** Se conserva por compatibilidad y delega en `migrar.py`. |
 
 ## 2. Etapas del pipeline
@@ -22,8 +26,9 @@ métricas**. El orquestador las declara en `config.yaml` (`pipeline.tareas`).
 |---|---|---|---|
 | `consolidar_datos.py` | `ejecutar_consolidacion` | Une los CSV de las fuentes configuradas y avisa de CSV presentes en `raw/` que no están configurados. | `registros_extraidos` |
 | `limpiar_datos.py` | `ejecutar_limpieza` | Separa incompletos, duplicados exactos y conflictos de clave de negocio. | `registros_limpios`, `registros_rechazados` |
-| `validar_reglas.py` | `ejecutar_validacion` | Aplica las reglas de negocio e indica el motivo de cada rechazo. | `registros_validos`, `registros_rechazados` |
-| `cargar_incremental.py` | `ejecutar_carga_incremental` | UPSERT idempotente en PostgreSQL; normaliza tipos enteros. | `operaciones_bd` |
+| `validar_reglas.py` | `ejecutar_validacion` | Aplica las reglas del esquema y de `config.yaml` (vía `reglas.py`) e indica todos los motivos de cada rechazo. | `registros_validos`, `registros_rechazados` |
+| `cargar_incremental.py` | `ejecutar_carga_incremental` | Verifica la tabla destino y ejecuta un UPSERT idempotente **generado desde el esquema y la clave de negocio**. | `operaciones_bd` |
+| `ingesta.py` | `registrar_ingesta` | Última etapa: registra los archivos procesados solo si todo terminó bien. | — |
 
 ## 3. Orquestación y auditoría
 
@@ -65,4 +70,4 @@ métricas**. El orquestador las declara en `config.yaml` (`pipeline.tareas`).
 
 ---
 
-Documentación: versión 1.1.0
+Documentación: versión 2.0.0

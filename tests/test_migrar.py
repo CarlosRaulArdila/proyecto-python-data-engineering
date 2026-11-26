@@ -61,3 +61,21 @@ def test_checksum_ignora_finales_de_linea(tmp_path):
     (crlf / "V1__a.sql").write_bytes(b"SELECT 1;\r\nSELECT 2;\r\n")
 
     assert listar_migraciones(lf)[0].checksum == listar_migraciones(crlf)[0].checksum
+
+
+def test_marcador_de_esquema(tmp_path, monkeypatch):
+
+    from src import migrar
+
+    monkeypatch.setattr(migrar, "ESQUEMA_BD", "ventas")
+    (tmp_path / "V1__a.sql").write_text("CREATE TABLE {{esquema}}.t (id int);")
+
+    migracion = listar_migraciones(tmp_path)[0]
+
+    assert migracion.sql == "CREATE TABLE ventas.t (id int);"
+
+
+def test_directorio_inexistente(tmp_path):
+
+    with pytest.raises(FileNotFoundError, match="migraciones"):
+        listar_migraciones(tmp_path / "no_existe")

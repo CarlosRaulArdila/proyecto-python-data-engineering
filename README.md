@@ -63,6 +63,20 @@ Key Features
 - Reproducible Local Environment: `docker-compose.yml` with a PostgreSQL warehouse, migrations and the ETL engine.
 - Continuous Integration: GitHub Actions runs Ruff, unit tests with coverage, PostgreSQL integration tests and the Docker build.
 
+Reusable template (v2.0.0)
+The engine in `src/` contains nothing specific to hospitals. Each pipeline is defined only by configuration:
+- Data contract (`esquema`): columns, types, required fields, max length, derived columns.
+- Declarative business rules (`reglas`): `rango`, `valores_permitidos`, `patron`, each with its rejection message. Vectorized validation (200,000 rows in ~0.4 s).
+- Business key and UPSERT generated from the configuration, with a pre-check of the target table.
+- File patterns per source (batches), `completa` or `incremental` ingestion (SHA-256 based) and file lineage in `etl_archivos_procesados`.
+- One PostgreSQL schema per project, with its own migrations, audit and lineage tables.
+- Example: `pipelines/ventas/` — a retail sales pipeline built with zero new Python code. See `docs/nuevo_pipeline.md`.
+
+Run another pipeline by pointing to its configuration:
+
+ETL_CONFIG_PATH=pipelines/ventas/config.yaml python -m src.migrar
+ETL_CONFIG_PATH=pipelines/ventas/config.yaml python -m src.ejecutar_pipeline
+
 
 Project Structure
 
@@ -82,8 +96,12 @@ proyecto_python_data_engineering/
 │   ├── processed/
 │   └── rejected/
 │
+├── pipelines/
+│   └── ventas/             # example pipeline: config.yaml, migrations, sample data
+│
 ├── docs/
 │   ├── README.md
+│   ├── nuevo_pipeline.md
 │   ├── arquitectura.md
 │   ├── modulos.md
 │   ├── configuracion.md
@@ -174,7 +192,7 @@ The compose warehouse listens on host port 5435 by default (`WAREHOUSE_PORT`) to
 Docker and Airflow Execution
 The project includes a Docker image for executing the ETL application:
 
-docker build --build-arg ETL_VERSION=1.1.0 -t hospital-etl:1.1.0 .
+docker build --build-arg ETL_VERSION=2.0.0 -t hospital-etl:2.0.0 .
 
 The DAG runs two tasks with this image: `aplicar_migraciones` >> `ejecutar_pipeline_etl`. Rebuild the image after updating the code.
 
@@ -211,7 +229,7 @@ Integration tests (require a disposable PostgreSQL database whose name ends in `
 
 RUN_INTEGRATION_TESTS=1 DB_NAME=hospital_dw_test pytest -v -m integracion
 
-The suite contains 54 unit tests and 3 PostgreSQL integration tests (migration of a v1.0 database, full load + idempotent rerun + incremental update, and audited failure).
+The suite contains 145 unit tests and 7 PostgreSQL integration tests (migrations from v1.0, full load + idempotent rerun + update, audited failure, file lineage, incremental batches, no registration on failure, and the full sales pipeline).
 Validated Execution Results
 The initial synthetic dataset contains 15 records from three hospital sources.
 Metric	Result
@@ -222,7 +240,7 @@ Rejected records	3
 Incomplete records rejected	2
 Duplicate records rejected	1
 Database operations on unchanged rerun	0
-Automated tests passed	57 (54 unit + 3 integration)
+Automated tests passed	152 (145 unit + 7 integration)
 
 The integrated execution through Apache Airflow and Docker has been validated successfully.
 
@@ -276,5 +294,5 @@ Future Improvements
 - Infrastructure and deployment automation.
 
 
-Project version: 1.1.0
-Status: Phase 1 (stabilization) completed: versioned migrations, reproducible environment, config-driven stages, robust auditing, CI. See CHANGELOG.md.
+Project version: 2.0.0
+Status: Phase 2 (reusable template) completed: data contract, declarative rules, generated UPSERT, incremental ingestion with lineage, multi-project schemas and a second example pipeline. See CHANGELOG.md.

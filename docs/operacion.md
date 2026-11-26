@@ -11,7 +11,7 @@ Este documento describe cómo ejecutar, supervisar y verificar el pipeline de In
 - Tareas: aplicar_migraciones >> ejecutar_pipeline_etl
 - Orquestador: Apache Airflow
 - Ejecutor: DockerOperator
-- Imagen: hospital-etl:1.1.0
+- Imagen: hospital-etl:2.0.0
 - Base de datos: hospital_dw
 - Tabla de auditoría: public.etl_auditoria
 - Control de migraciones: public.etl_migraciones
@@ -67,6 +67,19 @@ SELECT
 FROM public.etl_auditoria
 ORDER BY fecha_inicio DESC
 LIMIT 20;
+
+Linaje: qué archivos alimentaron cada ejecución (tabla etl_archivos_procesados):
+
+SELECT e.id, e.fecha_inicio, e.estado, a.fuente, a.nombre_archivo, a.registros,
+       left(a.hash_sha256, 12) AS hash
+FROM public.etl_auditoria e
+JOIN public.etl_archivos_procesados a ON a.run_id = e.run_id
+ORDER BY e.id DESC, a.nombre_archivo
+LIMIT 30;
+
+Con ingesta.modo: incremental, un archivo cuyo hash ya está en esta tabla se
+omite en las siguientes ejecuciones. Para forzar su reproceso, elimine su fila
+de etl_archivos_procesados (procedimiento controlado).
 
 ## 6. Interpretación de métricas
 Campo	Significado
@@ -140,4 +153,4 @@ Se editó una migración ya aplicada. Restaurar el archivo original y crear una 
 ## 10. Reutilización
 Para operar el pipeline en otro proyecto se deben actualizar el identificador del DAG, las conexiones, la configuración, las rutas, la imagen Docker y la tabla de destino.
 
-Versión documentada: 1.1.0
+Versión documentada: 2.0.0

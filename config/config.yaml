@@ -5,12 +5,18 @@
 
 proyecto:
   nombre: "proyecto_python_data_engineering"
-  version: "1.1.0"
+  version: "2.0.0"
   entorno: "desarrollo"
 
 
 # ============================================================
 # FUENTES DE DATOS
+# ------------------------------------------------------------
+# Cada fuente define 'archivo' (nombre exacto) o 'patron'
+# (comodines, para recibir lotes), por ejemplo:
+#   - nombre: "Hospital 4"
+#     patron: "hospital_4_*.csv"
+# El 'nombre' se guarda en la columna pipeline.columna_fuente.
 # ============================================================
 
 fuentes:
@@ -22,6 +28,112 @@ fuentes:
 
   - nombre: "Hospital 3"
     archivo: "hospital_3.csv"
+
+
+# ============================================================
+# INGESTA
+# ------------------------------------------------------------
+# modo:
+#   completa:    procesa todos los archivos en cada ejecución
+#   incremental: solo procesa archivos que no se hayan cargado
+#                antes (se identifican por su hash SHA-256)
+# En ambos modos, los archivos de cada ejecución exitosa quedan
+# registrados en base_datos.tabla_archivos (linaje).
+# ============================================================
+
+ingesta:
+  modo: "completa"
+
+
+# ============================================================
+# ESQUEMA (CONTRATO DE DATOS)
+# ------------------------------------------------------------
+# Columnas que maneja el pipeline, en orden.
+#   tipo:         texto | entero | decimal | fecha | booleano
+#   obligatoria:  si está vacía, el registro se rechaza como
+#                 incompleto (por defecto: true)
+#   derivada:     la añade el pipeline; no se exige en la fuente
+#   longitud_max: longitud máxima para columnas de texto
+#   etiqueta:     nombre legible usado en los mensajes de rechazo
+# Las columnas de las fuentes que no estén aquí se descartan
+# con un aviso en el log.
+# ============================================================
+
+esquema:
+  columnas:
+    - nombre: "numero_historia"
+      tipo: "texto"
+      etiqueta: "Número de historia"
+      longitud_max: 20
+      descripcion: "Número de historia clínica"
+
+    - nombre: "fecha"
+      tipo: "fecha"
+      etiqueta: "Fecha"
+      descripcion: "Fecha del procedimiento"
+
+    - nombre: "edad"
+      tipo: "entero"
+      etiqueta: "Edad"
+      descripcion: "Edad del paciente en años"
+
+    - nombre: "especialidad"
+      tipo: "texto"
+      etiqueta: "Especialidad"
+      longitud_max: 50
+
+    - nombre: "tecnica_anestesica"
+      tipo: "texto"
+      etiqueta: "Técnica anestésica"
+      longitud_max: 50
+
+    - nombre: "duracion_minutos"
+      tipo: "entero"
+      etiqueta: "Duración"
+      descripcion: "Duración del procedimiento en minutos"
+
+    - nombre: "hospital_origen"
+      tipo: "texto"
+      etiqueta: "Hospital de origen"
+      longitud_max: 100
+      derivada: true
+      descripcion: "Nombre de la fuente (fuentes[].nombre)"
+
+
+# ============================================================
+# REGLAS DE NEGOCIO
+# ------------------------------------------------------------
+# Se suman a las reglas automáticas del esquema (obligatoria,
+# tipo y longitud_max). Tipos disponibles:
+#   rango:              min y/o max (min_inclusivo / max_inclusivo,
+#                       por defecto true). Solo columnas numéricas.
+#   valores_permitidos: lista 'valores'
+#   patron:             expresión regular 'patron' (valor completo)
+# Cada regla define el 'mensaje' que verá el registro rechazado.
+# ============================================================
+
+reglas:
+  - columna: "edad"
+    tipo: "rango"
+    min: 0
+    max: 120
+    mensaje: "Edad fuera del rango permitido"
+
+  - columna: "duracion_minutos"
+    tipo: "rango"
+    min: 0
+    min_inclusivo: false
+    mensaje: "Duración inválida"
+
+  - columna: "especialidad"
+    tipo: "valores_permitidos"
+    valores: ["Cirugia", "Urologia", "Traumatologia"]
+    mensaje: "Especialidad no permitida"
+
+  - columna: "tecnica_anestesica"
+    tipo: "valores_permitidos"
+    valores: ["General", "Regional", "Sedacion"]
+    mensaje: "Técnica anestésica no permitida"
 
 
 # ============================================================
@@ -49,6 +161,8 @@ archivos:
   fuera_reglas: "registros_fuera_reglas.csv"
   conflictos_clave: "registros_conflicto_clave.csv"
 
+  manifiesto: "manifiesto_archivos.json"
+
 
 # ============================================================
 # CONFIGURACIÓN DEL PIPELINE
@@ -56,6 +170,9 @@ archivos:
 
 pipeline:
   id: "hospital_etl_pipeline"
+
+  # Columna derivada (del esquema) donde se guarda fuentes[].nombre
+  columna_fuente: "hospital_origen"
 
   # Columnas que identifican un registro de negocio.
   # Deben coincidir con el índice único de la tabla destino (V001).
@@ -84,6 +201,12 @@ pipeline:
       modulo: "src.cargar_incremental"
       funcion: "ejecutar_carga_incremental"
 
+    # Debe ser la última: registra los archivos procesados solo si
+    # todas las etapas anteriores terminaron bien.
+    - nombre: "registrar_ingesta"
+      modulo: "src.ingesta"
+      funcion: "registrar_ingesta"
+
   # true: la primera etapa que falla detiene el pipeline (FALLIDO).
   # false: continúa con las siguientes y termina como PARCIAL.
   detener_si_falla: true
@@ -97,6 +220,28 @@ base_datos:
   esquema: "public"
   tabla_destino: "hospital_registros"
   tabla_auditoria: "etl_auditoria"
+  tabla_archivos: "etl_archivos_procesados"
+
+  # El UPSERT se genera desde el esquema y pipeline.clave_negocio:
+  # inserta todas las columnas del esquema y, si la clave ya existe,
+  # actualiza las demás solo cuando cambian.
+  # Opcional: limitar qué columnas se actualizan.
+  # columnas_actualizables: ["edad", "especialidad"]
+
+  # Columna que se marca con la fecha y hora de cada actualización
+  # (debe existir en la tabla; ver migración V003). Omitir si no se usa.
+  columna_actualizacion: "fecha_actualizacion"
+
+
+# ============================================================
+# MIGRACIONES
+# ------------------------------------------------------------
+# Directorio con los archivos V<NNN>__<descripcion>.sql de este
+# proyecto. El historial se guarda en <base_datos.esquema>.etl_migraciones.
+# ============================================================
+
+migraciones:
+  directorio: "sql/migraciones"
 
 
 # ============================================================

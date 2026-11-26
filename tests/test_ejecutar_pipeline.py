@@ -160,3 +160,27 @@ def test_todas_las_tareas_de_config_son_resolubles():
 
     for definicion in orquestador.CONFIG["pipeline"]["tareas"]:
         assert callable(resolver_tarea(definicion).funcion)
+
+
+def test_las_tareas_reciben_el_contexto_si_lo_aceptan(auditoria_simulada):
+
+    recibido = {}
+
+    def con_contexto(contexto):
+        recibido.update(contexto)
+        return {}
+
+    codigo = orquestador.ejecutar_pipeline(
+        [Tarea("sin", lambda: {}), Tarea("con", con_contexto)]
+    )
+
+    assert codigo == 0
+    assert recibido["id_ejecucion"] == 42
+    assert recibido["pipeline_id"] == "hospital_etl_pipeline"
+    assert len(recibido["run_id"]) == 36
+    assert recibido["errores"] == []
+
+
+def test_la_ultima_tarea_es_registrar_ingesta():
+
+    assert orquestador.CONFIG["pipeline"]["tareas"][-1]["funcion"] == "registrar_ingesta"

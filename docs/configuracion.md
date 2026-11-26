@@ -20,14 +20,19 @@ Entre sus configuraciones se encuentran:
 | Sección | Contenido |
 |---|---|
 | `proyecto` | Nombre, versión y entorno. |
-| `fuentes` | Archivos de entrada y nombre de la fuente (`hospital_origen`). |
+| `fuentes` | Fuentes de entrada: `nombre` (se guarda en `hospital_origen`) y `archivo` (nombre exacto) o `patron` (comodines, para lotes). |
+| `ingesta` | `modo`: `completa` (todos los archivos en cada ejecución) o `incremental` (solo archivos no cargados antes, por hash SHA-256). |
+| `esquema` | Contrato de datos: columnas en orden, `tipo` (texto, entero, decimal, fecha, booleano), `obligatoria`, `derivada`, `longitud_max` y `descripcion`. |
+| `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
 | `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
 | `pipeline.id` | Identificador del pipeline en la auditoría. |
+| `pipeline.columna_fuente` | Columna derivada del esquema donde se guarda el nombre de cada fuente. |
 | `pipeline.clave_negocio` | Columnas que identifican un registro; deben coincidir con el índice único de la tabla destino. |
 | `pipeline.tareas` | Etapas en orden: `nombre`, `modulo` y `funcion`. |
 | `pipeline.detener_si_falla` | `true`: se detiene en el primer fallo (FALLIDO). `false`: continúa y termina como PARCIAL. |
-| `base_datos` | Esquema, tabla destino y tabla de auditoría. |
+| `base_datos` | Esquema, tabla destino, tabla de auditoría, `tabla_archivos` (linaje) y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
+| `migraciones` | `directorio` con las migraciones del proyecto (por defecto `sql/migraciones`). |
 | `logging` | Archivo, nivel, rotación y formato (incluye `run_id`). |
 
 Para usar otra configuración sin modificar el archivo del repositorio,
@@ -112,7 +117,7 @@ El archivo `.env` no debe publicarse ni compartirse.
 
 El proyecto utiliza `Dockerfile` para construir la imagen:
 
-`hospital-etl:1.1.0` (la versión se pasa con `--build-arg ETL_VERSION`)
+`hospital-etl:2.0.0` (la versión se pasa con `--build-arg ETL_VERSION`)
 
 Airflow ejecuta esta imagen mediante `DockerOperator`.
 
@@ -148,4 +153,4 @@ No incluir datos reales de pacientes en ejemplos, pruebas o documentación.
 ## 9. Estado
 
 Documento elaborado a partir de la configuración del proyecto
-hospitalario, versión 1.1.0.
+hospitalario, versión 2.0.0.

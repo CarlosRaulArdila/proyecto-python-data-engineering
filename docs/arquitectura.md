@@ -18,7 +18,7 @@ flowchart TD
     I[Apache Airflow] --> J[DockerOperator]
     J --> M[Migraciones SQL]
     M --> H
-    J --> K[Contenedor hospital-etl:1.1.0]
+    J --> K[Contenedor hospital-etl:2.0.0]
     K --> C
     K --> L[Auditoría ETL]
     L --> H
@@ -47,7 +47,7 @@ PruebasPytestValidación del código
 5. Orquestación
 Airflow administra el DAG hospital_etl_pipeline.
 
-El DAG utiliza DockerOperator para ejecutar la imagen hospital-etl:1.1.0 en dos tareas: aplicar_migraciones y ejecutar_pipeline_etl.
+El DAG utiliza DockerOperator para ejecutar la imagen hospital-etl:2.0.0 en dos tareas: aplicar_migraciones y ejecutar_pipeline_etl.
 
 Dentro del contenedor, src/ejecutar_pipeline.py ejecuta las etapas en el mismo proceso, en el orden declarado en config.yaml. Cada etapa devuelve sus métricas como un diccionario, sin depender del texto que imprime.
 
@@ -89,4 +89,4 @@ Las cero operaciones de base de datos corresponden a una nueva ejecución sin ca
 9. Estado
 Arquitectura funcional validada en entorno local de desarrollo.
 
-Versión documentada: 1.1.0.
+Versión documentada: 2.0.0.

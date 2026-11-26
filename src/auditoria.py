@@ -1,7 +1,8 @@
 """
 Registro de auditoría de las ejecuciones del pipeline (public.etl_auditoria).
 
-La tabla se crea con la migración sql/migraciones/V002__crear_etl_auditoria.sql.
+La tabla se define en config.yaml (base_datos.tabla_auditoria) y se crea
+con la migración sql/migraciones/V002__crear_etl_auditoria.sql.
 """
 
 import uuid
@@ -9,6 +10,14 @@ import uuid
 from sqlalchemy import text
 
 from src.conexion_db import obtener_engine
+from src.configuracion import CONFIG
+from src.sql_utils import nombre_tabla
+
+# Tabla de auditoría desde config.yaml (base_datos.esquema / tabla_auditoria)
+TABLA_AUDITORIA = nombre_tabla(
+    CONFIG["base_datos"]["esquema"],
+    CONFIG["base_datos"].get("tabla_auditoria", "etl_auditoria"),
+)
 
 ESTADO_EN_PROCESO = "EN_PROCESO"
 ESTADO_EXITOSO = "EXITOSO"
@@ -32,8 +41,8 @@ def registrar_inicio(
     if run_id is None:
         run_id = uuid.uuid4()
 
-    consulta = text("""
-        INSERT INTO public.etl_auditoria (
+    consulta = text(f"""
+        INSERT INTO {TABLA_AUDITORIA} (
             fecha_inicio,
             estado,
             run_id,
@@ -94,8 +103,8 @@ def registrar_fin(
             f"Valores permitidos: {sorted(ESTADOS_FINALES)}"
         )
 
-    consulta = text("""
-        UPDATE public.etl_auditoria
+    consulta = text(f"""
+        UPDATE {TABLA_AUDITORIA}
         SET
             fecha_fin = CURRENT_TIMESTAMP,
             estado = :estado,

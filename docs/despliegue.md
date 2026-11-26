@@ -44,10 +44,10 @@ docker compose ps
 
 5. Construir la imagen ETL
 Desde Ubuntu/WSL:
-docker build --build-arg ETL_VERSION=1.1.0 -t hospital-etl:1.1.0 \
+docker build --build-arg ETL_VERSION=2.0.0 -t hospital-etl:2.0.0 \
 /mnt/c/Users/User/Documents/proyecto_python_data_engineering
 
-Importante: el DAG usa por defecto la imagen hospital-etl:1.1.0.
+Importante: el DAG usa por defecto la imagen hospital-etl:2.0.0.
 La imagen debe reconstruirse después de actualizar el código.
 
 La imagen contiene el código Python y la configuración necesaria para ejecutar el pipeline.
@@ -81,7 +81,7 @@ Variables de entorno opcionales del scheduler (si no se definen se usan los valo
 | Variable | Valor por defecto |
 |---|---|
 | ETL_PROJECT_PATH | /mnt/c/Users/User/Documents/proyecto_python_data_engineering |
-| ETL_IMAGE | hospital-etl:1.1.0 |
+| ETL_IMAGE | hospital-etl:2.0.0 |
 | ETL_DOCKER_NETWORK | airflow-docker_default |
 | ETL_AIRFLOW_CONN_ID | hospital_dw_etl |
 | ETL_ENVIRONMENT | desarrollo |
@@ -127,4 +127,4 @@ Para reutilizar esta plantilla se deben adaptar:
 6. Los volúmenes y carpetas de datos.
 7. La base de datos y tabla de destino.
 
-Versión documentada: 1.1.0
+Versión documentada: 2.0.0

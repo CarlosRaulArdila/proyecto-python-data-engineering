@@ -1,6 +1,9 @@
 """
-Etapa 3 - Validación: aplica las reglas de negocio y separa los
-registros que no las cumplen, indicando el motivo.
+Etapa 3 - Validación: aplica las reglas automáticas del esquema y las
+reglas de negocio declaradas en config.yaml (sección `reglas`), y separa
+los registros que no las cumplen indicando el motivo.
+
+El motor de reglas está en src/reglas.py.
 """
 
 import logging
@@ -8,6 +11,8 @@ import logging
 import pandas as pd
 
 from src.configuracion import CONFIG, resolver_ruta
+from src.esquema import obtener_esquema
+from src.reglas import construir_reglas, validar_dataframe
 
 logger = logging.getLogger(__name__)
 
@@ -21,89 +26,19 @@ ARCHIVO_VALIDOS = PROCESSED_DIR / CONFIG["archivos"]["validados"]
 ARCHIVO_RECHAZADOS = REJECTED_DIR / CONFIG["archivos"]["fuera_reglas"]
 
 
-# Categorías permitidas
-ESPECIALIDADES_VALIDAS = [
-    "Cirugia",
-    "Urologia",
-    "Traumatologia"
-]
+def validar_datos(df, esquema=None, reglas=None):
+    """
+    Aplica las reglas del esquema y las reglas de negocio de config.yaml.
+    Devuelve (df_validos, df_rechazados); los rechazados incluyen la
+    columna errores_validacion con los motivos.
+    """
 
-TECNICAS_VALIDAS = [
-    "General",
-    "Regional",
-    "Sedacion"
-]
+    esquema = esquema or obtener_esquema(CONFIG)
 
+    if reglas is None:
+        reglas = construir_reglas(CONFIG.get("reglas"), esquema)
 
-def validar_datos(df):
-
-    errores_por_fila = []
-
-    for _, fila in df.iterrows():
-        errores = []
-
-        # Validar número de historia
-        if (
-            pd.isna(fila["numero_historia"])
-            or str(fila["numero_historia"]).strip() == ""
-        ):
-            errores.append("Número de historia vacío")
-
-        # Validar fecha
-        fecha = pd.to_datetime(fila["fecha"], errors="coerce")
-
-        if pd.isna(fecha):
-            errores.append("Fecha inválida")
-
-        # Validar edad
-        edad = pd.to_numeric(fila["edad"], errors="coerce")
-
-        if pd.isna(edad) or not 0 <= edad <= 120:
-            errores.append("Edad fuera del rango permitido")
-        elif edad != int(edad):
-            errores.append("Edad no es un número entero")
-
-        # Validar duración
-        duracion = pd.to_numeric(
-            fila["duracion_minutos"],
-            errors="coerce"
-        )
-
-        if pd.isna(duracion) or duracion <= 0:
-            errores.append("Duración inválida")
-        elif duracion != int(duracion):
-            errores.append("Duración no es un número entero")
-
-        # Validar especialidad
-        if fila["especialidad"] not in ESPECIALIDADES_VALIDAS:
-            errores.append("Especialidad no permitida")
-
-        # Validar técnica anestésica
-        if fila["tecnica_anestesica"] not in TECNICAS_VALIDAS:
-            errores.append("Técnica anestésica no permitida")
-
-        # Validar hospital de origen
-        if (
-            pd.isna(fila["hospital_origen"])
-            or str(fila["hospital_origen"]).strip() == ""
-        ):
-            errores.append("Hospital de origen vacío")
-
-        errores_por_fila.append("; ".join(errores))
-
-    # Clasificar registros
-    df_resultado = df.copy()
-    df_resultado["errores_validacion"] = errores_por_fila
-
-    df_validos = df_resultado[
-        df_resultado["errores_validacion"] == ""
-    ].drop(columns=["errores_validacion"])
-
-    df_rechazados = df_resultado[
-        df_resultado["errores_validacion"] != ""
-    ].copy()
-
-    return df_validos, df_rechazados
+    return validar_dataframe(df, esquema, reglas)
 
 
 def ejecutar_validacion() -> dict:
@@ -118,7 +53,9 @@ def ejecutar_validacion() -> dict:
         )
 
     df = pd.read_csv(
-        ARCHIVO_ENTRADA, dtype={"numero_historia": str}, encoding="utf-8-sig"
+        ARCHIVO_ENTRADA,
+        dtype=obtener_esquema(CONFIG).dtypes_lectura(),
+        encoding="utf-8-sig",
     )
 
     df_validos, df_rechazados = validar_datos(df)

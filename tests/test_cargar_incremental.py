@@ -121,3 +121,25 @@ def test_cargar_incremental_sin_registros():
 
     assert operaciones == 0
     conexion.execute.assert_not_called()
+
+
+def test_preparar_datos_usa_el_esquema(tmp_path):
+
+    from src.esquema import construir_esquema
+
+    esquema = construir_esquema({
+        "columnas": [
+            {"nombre": "codigo", "tipo": "texto"},
+            {"nombre": "fecha", "tipo": "fecha"},
+            {"nombre": "unidades", "tipo": "entero"},
+        ]
+    })
+
+    archivo = tmp_path / "datos.csv"
+    archivo.write_text("codigo,fecha,unidades\n0042,2026-05-01,7.0\n", encoding="utf-8")
+
+    df = preparar_datos(archivo, esquema)
+
+    assert df.loc[0, "codigo"] == "0042"
+    assert df.loc[0, "fecha"] == date(2026, 5, 1)
+    assert df.loc[0, "unidades"] == 7

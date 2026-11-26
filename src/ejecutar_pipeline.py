@@ -20,6 +20,7 @@ Código de salida: 0 si la ejecución es EXITOSA, 1 en cualquier otro caso.
 """
 
 import importlib
+import inspect
 import logging
 import os
 import sys
@@ -50,7 +51,20 @@ METRICAS_ACUMULABLES = {"registros_rechazados", "operaciones_bd"}
 @dataclass(frozen=True)
 class Tarea:
     nombre: str
-    funcion: Callable[[], dict | None]
+    funcion: Callable[..., dict | None]
+
+    def ejecutar(self, contexto: dict) -> dict | None:
+        """
+        Llama a la función de la etapa. Si acepta un parámetro, recibe el
+        contexto de la ejecución (run_id, pipeline_id, errores previos...).
+        """
+
+        try:
+            acepta_contexto = bool(inspect.signature(self.funcion).parameters)
+        except (TypeError, ValueError):
+            acepta_contexto = False
+
+        return self.funcion(contexto) if acepta_contexto else self.funcion()
 
 
 def resolver_tarea(definicion: dict) -> Tarea:
@@ -142,6 +156,14 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
         )
         logger.info("Auditoría iniciada | ID: %s", id_ejecucion)
 
+        # Información de la ejecución disponible para las etapas que la usen
+        contexto_ejecucion = {
+            "run_id": run_id,
+            "id_ejecucion": id_ejecucion,
+            "pipeline_id": contexto["pipeline_id"],
+            "errores": errores,
+        }
+
         if tareas is None:
             tareas = [resolver_tarea(t) for t in CONFIG["pipeline"]["tareas"]]
 
@@ -150,7 +172,7 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
             logger.info("Iniciando tarea: %s", tarea.nombre)
 
             try:
-                resultado = tarea.funcion()
+                resultado = tarea.ejecutar(contexto_ejecucion)
 
             except Exception as error:
                 logger.exception("La tarea %s ha fallado", tarea.nombre)

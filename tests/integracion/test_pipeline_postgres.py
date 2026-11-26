@@ -61,7 +61,7 @@ def reiniciar_base(engine):
     with engine.begin() as conexion:
         conexion.execute(text(
             "DROP TABLE IF EXISTS public.hospital_registros, "
-            "public.etl_auditoria, public.etl_migraciones"
+            "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados"
         ))
 
 
@@ -82,6 +82,10 @@ def ejecutar(modulo, entorno_extra=None):
 def proyecto_temporal(tmp_path):
     """Config apuntando a carpetas temporales con los CSV de ejemplo."""
 
+    return crear_proyecto(tmp_path)
+
+
+def crear_proyecto(tmp_path, ajustar=None):
     config = yaml.safe_load((RAIZ / "config" / "config.yaml").read_text(encoding="utf-8"))
 
     raw = tmp_path / "raw"
@@ -96,6 +100,9 @@ def proyecto_temporal(tmp_path):
         "rejected": str(tmp_path / "rejected"),
         "logs": str(tmp_path / "logs"),
     }
+
+    if ajustar:
+        ajustar(config)
 
     ruta_config = tmp_path / "config.yaml"
     ruta_config.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
@@ -132,7 +139,7 @@ def test_migraciones_actualizan_una_base_de_la_version_anterior(engine):
             "WHERE table_name = 'hospital_registros'"
         )).scalars())
 
-    assert versiones == [1, 2, 3]
+    assert versiones == [1, 2, 3, 4]
     assert filas == 1
     assert {"fecha_creacion", "fecha_actualizacion"} <= columnas
 
@@ -211,3 +218,121 @@ def test_fallo_de_fuente_queda_auditado(engine, proyecto_temporal):
 
     assert estado == "FALLIDO"
     assert "hospital_2.csv" in mensaje
+
+
+def consultar(engine, sql):
+    with engine.connect() as conexion:
+        return conexion.execute(text(sql)).all()
+
+
+def test_linaje_registra_los_archivos_de_cada_ejecucion(engine, proyecto_temporal):
+
+    entorno, _ = proyecto_temporal
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+    filas = consultar(engine, """
+        SELECT a.nombre_archivo, a.fuente, a.registros, length(a.hash_sha256)
+        FROM etl_archivos_procesados a
+        JOIN etl_auditoria e ON e.run_id = a.run_id
+        ORDER BY a.nombre_archivo
+    """)
+
+    assert [tuple(f) for f in filas] == [
+        ("hospital_1.csv", "Hospital 1", 5, 64),
+        ("hospital_2.csv", "Hospital 2", 5, 64),
+        ("hospital_3.csv", "Hospital 3", 5, 64),
+    ]
+
+
+def test_ingesta_incremental_por_lotes(engine, tmp_path):
+
+    def modo_incremental_con_patrones(config):
+        config["ingesta"] = {"modo": "incremental"}
+        config["fuentes"] = [
+            {"nombre": "Hospital 1", "patron": "hospital_1*.csv"},
+            {"nombre": "Hospital 2", "patron": "hospital_2*.csv"},
+            {"nombre": "Hospital 3", "patron": "hospital_3*.csv"},
+        ]
+
+    entorno, raw = crear_proyecto(tmp_path, modo_incremental_con_patrones)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    def ultima_auditoria():
+        return tuple(consultar(engine, """
+            SELECT estado, registros_extraidos, operaciones_bd
+            FROM etl_auditoria ORDER BY id DESC LIMIT 1
+        """)[0])
+
+    # 1. Primera ejecución: carga los 3 archivos
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
+    assert ultima_auditoria() == ("EXITOSO", 15, 12)
+
+    # 2. Sin archivos nuevos: termina bien sin leer nada
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert "Omitido (ya procesado): hospital_1.csv" in resultado.stdout
+    assert ultima_auditoria() == ("EXITOSO", 0, 0)
+
+    # 3. Llega un lote nuevo de Hospital 1: solo se procesa ese archivo
+    (raw / "hospital_1_lote_2.csv").write_text(
+        "numero_historia,fecha,edad,especialidad,tecnica_anestesica,duracion_minutos\n"
+        "001006,2026-02-01,50,Cirugia,General,95\n"
+        "001007,2026-02-02,61,Urologia,Regional,70\n",
+        encoding="utf-8",
+    )
+
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+    assert ultima_auditoria() == ("EXITOSO", 2, 2)
+
+    # 4. El mismo contenido con otro nombre también se omite (hash)
+    (raw / "hospital_1_lote_2_copia.csv").write_bytes(
+        (raw / "hospital_1_lote_2.csv").read_bytes()
+    )
+
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
+    assert ultima_auditoria() == ("EXITOSO", 0, 0)
+
+    total = consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0]
+    archivos = consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0]
+
+    assert total == 14
+    assert archivos == 4
+
+
+def test_si_la_carga_falla_los_archivos_no_se_registran(engine, tmp_path):
+
+    def incremental(config):
+        config["ingesta"] = {"modo": "incremental"}
+
+    entorno, _ = crear_proyecto(tmp_path, incremental)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    # Se rompe la tabla destino: la carga fallará
+    with engine.begin() as conexion:
+        conexion.execute(text("ALTER TABLE hospital_registros RENAME COLUMN edad TO edad_x"))
+
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 1
+    assert "no tiene las columnas ['edad']" in resultado.stdout
+
+    archivos = consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0]
+    assert archivos == 0
+
+    # Corregida la tabla, la siguiente ejecución vuelve a procesar los archivos
+    with engine.begin() as conexion:
+        conexion.execute(text("ALTER TABLE hospital_registros RENAME COLUMN edad_x TO edad"))
+
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
+
+    assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 3
+    assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12

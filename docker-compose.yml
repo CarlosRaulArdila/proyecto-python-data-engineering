@@ -15,8 +15,8 @@ x-etl-base: &etl-base
   build:
     context: .
     args:
-      ETL_VERSION: ${ETL_IMAGE_TAG:-1.1.0}
-  image: hospital-etl:${ETL_IMAGE_TAG:-1.1.0}
+      ETL_VERSION: ${ETL_IMAGE_TAG:-2.0.0}
+  image: hospital-etl:${ETL_IMAGE_TAG:-2.0.0}
   environment:
     DB_HOST: warehouse
     DB_PORT: "5432"
