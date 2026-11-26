@@ -1,0 +1,9 @@
+line-length = 100
+target-version = "py312"
+extend-exclude = ["_to_delete"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[lint.isort]
+known-first-party = ["src"]

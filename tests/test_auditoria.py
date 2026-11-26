@@ -17,8 +17,8 @@ def conexion_simulada(monkeypatch):
 
     monkeypatch.setattr(
         auditoria,
-        "engine",
-        engine_simulado
+        "obtener_engine",
+        lambda: engine_simulado
     )
 
     return engine_simulado, conexion
@@ -80,3 +80,13 @@ def test_registrar_fin_id_inexistente(conexion_simulada):
     engine.begin.assert_called_once()
 
     conexion.execute.assert_called_once()
+
+
+def test_registrar_fin_estado_no_valido(conexion_simulada):
+
+    engine, conexion = conexion_simulada
+
+    with pytest.raises(ValueError, match="Estado final no válido"):
+        auditoria.registrar_fin(id_ejecucion=1, estado="TERMINADO")
+
+    conexion.execute.assert_not_called()

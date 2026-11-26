@@ -1,8 +1,9 @@
 
 import pandas as pd
+
+from src.consolidar_datos import consolidar_datos
 from src.limpiar_datos import limpiar_datos
 from src.validar_reglas import validar_datos
-from src.consolidar_datos import consolidar_datos
 
 
 def test_consolidar_datos_de_tres_hospitales(tmp_path):
@@ -44,9 +45,6 @@ def test_consolidar_datos_de_tres_hospitales(tmp_path):
 
     # Comprobar que se conservan los ceros iniciales
     assert df["numero_historia"].iloc[0] == "001001"
-
-
-from src.limpiar_datos import limpiar_datos
 
 
 def test_consolidacion_y_limpieza():

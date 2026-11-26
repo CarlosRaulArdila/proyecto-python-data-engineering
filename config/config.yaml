@@ -5,6 +5,7 @@
 
 proyecto:
   nombre: "proyecto_python_data_engineering"
+  version: "1.1.0"
   entorno: "desarrollo"
 
 
@@ -46,6 +47,7 @@ archivos:
   incompletos: "registros_incompletos.csv"
   duplicados: "registros_duplicados.csv"
   fuera_reglas: "registros_fuera_reglas.csv"
+  conflictos_clave: "registros_conflicto_clave.csv"
 
 
 # ============================================================
@@ -53,12 +55,37 @@ archivos:
 # ============================================================
 
 pipeline:
-  tareas:
-    - "consolidar_datos.py"
-    - "limpiar_datos.py"
-    - "validar_reglas.py"
-    - "cargar_incremental.py"
+  id: "hospital_etl_pipeline"
 
+  # Columnas que identifican un registro de negocio.
+  # Deben coincidir con el índice único de la tabla destino (V001).
+  clave_negocio:
+    - "numero_historia"
+    - "fecha"
+    - "hospital_origen"
+
+  # Etapas en orden de ejecución. Cada una es una función que
+  # devuelve un diccionario de métricas para la auditoría.
+  # Para añadir una etapa: crear la función y declararla aquí.
+  tareas:
+    - nombre: "consolidar"
+      modulo: "src.consolidar_datos"
+      funcion: "ejecutar_consolidacion"
+
+    - nombre: "limpiar"
+      modulo: "src.limpiar_datos"
+      funcion: "ejecutar_limpieza"
+
+    - nombre: "validar"
+      modulo: "src.validar_reglas"
+      funcion: "ejecutar_validacion"
+
+    - nombre: "cargar_incremental"
+      modulo: "src.cargar_incremental"
+      funcion: "ejecutar_carga_incremental"
+
+  # true: la primera etapa que falla detiene el pipeline (FALLIDO).
+  # false: continúa con las siguientes y termina como PARCIAL.
   detener_si_falla: true
 
 
@@ -82,3 +109,5 @@ logging:
   max_bytes: 5242880
   backup_count: 5
   encoding: "utf-8"
+  # Cada línea incluye el run_id para correlacionar con etl_auditoria
+  formato: "%(asctime)s | %(levelname)s | %(run_id)s | %(name)s | %(message)s"

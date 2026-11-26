@@ -13,6 +13,7 @@ Plantilla modular y reutilizable para construir pipelines de Ingeniería de Dato
 | [Configuración](configuracion.md) | Configuración YAML, variables de entorno y conexiones |
 | [Despliegue](despliegue.md) | Construcción de imagen Docker y despliegue con Airflow |
 | [Operación](operacion.md) | Ejecución, supervisión, auditoría y mantenimiento |
+| [Cambios](../CHANGELOG.md) | Historial de versiones |
 
 ## Orden recomendado de lectura
 
@@ -34,10 +35,11 @@ Plantilla modular y reutilizable para construir pipelines de Ingeniería de Dato
 
 ## Estado del proyecto
 
-La versión 1.0.0 cuenta con un pipeline ETL modular, carga incremental, orquestación con Airflow y registro de auditoría en PostgreSQL.
-
-La ejecución integrada ha sido validada satisfactoriamente.
+La versión 1.1.0 (Fase 1 - estabilización) añade migraciones SQL versionadas,
+un entorno `docker-compose` reproducible, orquestación interna sin subprocesos
+ni lectura de métricas por texto, detección de conflictos de clave de negocio,
+integración continua y pruebas de integración contra PostgreSQL.
 
 ---
 
-Documentación: versión 1.0.0
+Documentación: versión 1.1.0

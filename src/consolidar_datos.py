@@ -1,89 +1,104 @@
+"""
+Etapa 1 - Consolidación: une los archivos de las fuentes configuradas
+en config.yaml en un único CSV.
+"""
+
+import logging
+from pathlib import Path
 
 import pandas as pd
 
-from src.configuracion import BASE_DIR, CONFIG
+from src.configuracion import CONFIG, resolver_ruta
 
+logger = logging.getLogger(__name__)
 
 # Obtener las rutas desde la configuración
-RAW_DIR = BASE_DIR / CONFIG["rutas"]["raw"]
-PROCESSED_DIR = BASE_DIR / CONFIG["rutas"]["processed"]
+RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
+PROCESSED_DIR = resolver_ruta(CONFIG["rutas"]["processed"])
 
 
-def consolidar_datos(archivos, raw_dir):
+def consolidar_datos(archivos: dict[str, str], raw_dir: Path) -> pd.DataFrame:
     """
-    Lee los archivos CSV de los hospitales y los consolida
-    en un único DataFrame.
+    Lee los archivos CSV de las fuentes y los consolida en un único
+    DataFrame, añadiendo la columna hospital_origen.
+
+    archivos: {nombre_archivo: nombre_fuente}
     """
 
-    lista_hospitales = []
+    lista_fuentes = []
 
-    for archivo, hospital in archivos.items():
-
+    for archivo, fuente in archivos.items():
         ruta = raw_dir / archivo
 
         if not ruta.exists():
-            raise FileNotFoundError(
-                f"No se encontró el archivo: {ruta}"
-            )
+            raise FileNotFoundError(f"No se encontró el archivo: {ruta}")
 
         df = pd.read_csv(
             ruta,
-            dtype={"numero_historia": str}
+            dtype={"numero_historia": str},
+            encoding="utf-8-sig",
         )
 
-        df["hospital_origen"] = hospital
+        df["hospital_origen"] = fuente
+        lista_fuentes.append(df)
 
-        lista_hospitales.append(df)
+        logger.info("%s: %s registros cargados", fuente, len(df))
 
-        print(f"{hospital}: {len(df)} registros cargados")
-
-    if not lista_hospitales:
+    if not lista_fuentes:
         raise ValueError("No se encontraron archivos para consolidar.")
 
-    df_consolidado = pd.concat(
-        lista_hospitales,
-        ignore_index=True
+    return pd.concat(lista_fuentes, ignore_index=True)
+
+
+def detectar_archivos_no_configurados(raw_dir: Path, configurados) -> list[str]:
+    """
+    Devuelve los CSV presentes en raw_dir que no están declarados en
+    config.yaml. Antes se ignoraban sin aviso.
+    """
+
+    configurados = set(configurados)
+
+    return sorted(
+        ruta.name
+        for ruta in raw_dir.glob("*.csv")
+        if ruta.name not in configurados
     )
 
-    return df_consolidado
 
+def ejecutar_consolidacion() -> dict:
+    """Ejecuta la etapa y devuelve sus métricas para la auditoría."""
 
-def ejecutar_consolidacion():
+    archivos = {fuente["archivo"]: fuente["nombre"] for fuente in CONFIG["fuentes"]}
 
-    # Construir las fuentes desde config.yaml
-    archivos = {
-        fuente["archivo"]: fuente["nombre"]
-        for fuente in CONFIG["fuentes"]
-    }
+    no_configurados = detectar_archivos_no_configurados(RAW_DIR, archivos)
 
-    df_consolidado = consolidar_datos(
-        archivos,
-        RAW_DIR
-    )
+    if no_configurados:
+        logger.warning(
+            "Archivos en %s que NO se procesan porque no están en "
+            "config.yaml (fuentes): %s",
+            RAW_DIR,
+            ", ".join(no_configurados),
+        )
 
-    PROCESSED_DIR.mkdir(
-        parents=True,
-        exist_ok=True
-    )
+    df_consolidado = consolidar_datos(archivos, RAW_DIR)
 
-    # Nombre del archivo definido en config.yaml
-    nombre_salida = CONFIG["archivos"]["consolidados"]
-    ruta_salida = PROCESSED_DIR / nombre_salida
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    ruta_salida = PROCESSED_DIR / CONFIG["archivos"]["consolidados"]
 
-    df_consolidado.to_csv(
+    df_consolidado.to_csv(ruta_salida, index=False, encoding="utf-8-sig")
+
+    logger.info(
+        "Consolidación completada | Registros: %s | Columnas: %s | Archivo: %s",
+        len(df_consolidado),
+        len(df_consolidado.columns),
         ruta_salida,
-        index=False,
-        encoding="utf-8-sig"
     )
 
-    print("\nCONSOLIDACIÓN COMPLETADA")
-    print(f"Total de registros: {len(df_consolidado)}")
-    print(f"Total de columnas: {len(df_consolidado.columns)}")
-    print(f"Archivo generado: {ruta_salida}")
-
-    print("\nVista previa:")
-    print(df_consolidado.head(10))
+    return {"registros_extraidos": len(df_consolidado)}
 
 
 if __name__ == "__main__":
+    from src.registro_logs import configurar_logging
+
+    configurar_logging()
     ejecutar_consolidacion()

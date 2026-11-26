@@ -15,6 +15,24 @@ Entre sus configuraciones se encuentran:
 - Parámetros de conexión y destino PostgreSQL.
 - Configuración de auditoría y logging.
 
+### Secciones principales de `config.yaml`
+
+| Sección | Contenido |
+|---|---|
+| `proyecto` | Nombre, versión y entorno. |
+| `fuentes` | Archivos de entrada y nombre de la fuente (`hospital_origen`). |
+| `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
+| `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
+| `pipeline.id` | Identificador del pipeline en la auditoría. |
+| `pipeline.clave_negocio` | Columnas que identifican un registro; deben coincidir con el índice único de la tabla destino. |
+| `pipeline.tareas` | Etapas en orden: `nombre`, `modulo` y `funcion`. |
+| `pipeline.detener_si_falla` | `true`: se detiene en el primer fallo (FALLIDO). `false`: continúa y termina como PARCIAL. |
+| `base_datos` | Esquema, tabla destino y tabla de auditoría. |
+| `logging` | Archivo, nivel, rotación y formato (incluye `run_id`). |
+
+Para usar otra configuración sin modificar el archivo del repositorio,
+defina `ETL_CONFIG_PATH` con la ruta del YAML alternativo.
+
 ## 2. Variables de entorno
 
 Las variables de entorno permiten separar la configuración sensible
@@ -33,6 +51,26 @@ a PostgreSQL:
 
 No se deben escribir contraseñas directamente en los módulos Python,
 el DAG ni los archivos de documentación.
+
+La plantilla `.env.example` documenta todas las variables. Para el
+desarrollo local:
+
+```bash
+cp .env.example .env   # y reemplazar los valores
+```
+
+Las variables definidas en el entorno del proceso (Airflow, Docker, CI)
+tienen prioridad sobre el archivo `.env`.
+
+Variables adicionales:
+
+| Variable | Función |
+|---|---|
+| `ETL_CONFIG_PATH` | Ruta de un `config.yaml` alternativo. |
+| `WAREHOUSE_PORT` | Puerto del host para el PostgreSQL de `docker-compose.yml` (5435 por defecto). |
+| `ETL_IMAGE_TAG` | Etiqueta de la imagen construida por `docker-compose.yml`. |
+| `ETL_PYTHON` | Intérprete que usa `ejecutar_pipeline.bat`. |
+| `RUN_INTEGRATION_TESTS` | `1` para ejecutar las pruebas de integración. |
 
 ## 3. Conexión de Airflow
 
@@ -74,7 +112,7 @@ El archivo `.env` no debe publicarse ni compartirse.
 
 El proyecto utiliza `Dockerfile` para construir la imagen:
 
-`hospital-etl:1.0`
+`hospital-etl:1.1.0` (la versión se pasa con `--build-arg ETL_VERSION`)
 
 Airflow ejecuta esta imagen mediante `DockerOperator`.
 
@@ -90,7 +128,8 @@ Para reutilizar esta arquitectura:
 1. Adaptar el nombre y entorno en `config/config.yaml`.
 2. Definir las fuentes de datos y sus archivos.
 3. Configurar las rutas de entrada y salida.
-4. Crear la base de datos y las tablas correspondientes.
+4. Crear la base de datos y adaptar las migraciones de `sql/migraciones/`
+   (ejecutarlas con `python -m src.migrar`).
 5. Configurar las variables de entorno.
 6. Crear la conexión correspondiente en Airflow.
 7. Adaptar el DAG y su identificador.
@@ -109,4 +148,4 @@ No incluir datos reales de pacientes en ejemplos, pruebas o documentación.
 ## 9. Estado
 
 Documento elaborado a partir de la configuración del proyecto
-hospitalario, versión 1.0.0.
+hospitalario, versión 1.1.0.

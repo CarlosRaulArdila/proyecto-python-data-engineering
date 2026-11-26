@@ -8,12 +8,13 @@ Este documento describe cómo ejecutar, supervisar y verificar el pipeline de In
 
 - Proyecto: proyecto_python_data_engineering
 - DAG: hospital_etl_pipeline
-- Tarea: ejecutar_pipeline_etl
+- Tareas: aplicar_migraciones >> ejecutar_pipeline_etl
 - Orquestador: Apache Airflow
 - Ejecutor: DockerOperator
-- Imagen: hospital-etl:1.0
+- Imagen: hospital-etl:1.1.0
 - Base de datos: hospital_dw
 - Tabla de auditoría: public.etl_auditoria
+- Control de migraciones: public.etl_migraciones
 
 ## 3. Ejecutar el pipeline
 
@@ -24,6 +25,15 @@ cd ~/airflow-docker
 docker compose exec scheduler airflow dags trigger hospital_etl_pipeline
 
 La ejecución también puede iniciarse desde la interfaz web de Airflow.
+
+Ejecución local (desde la raíz del proyecto):
+
+```bash
+python -m src.migrar             # la primera vez o tras actualizar el código
+python -m src.ejecutar_pipeline
+```
+
+En Windows también puede usarse ejecutar_pipeline.bat.
 
 ## 4. Supervisar ejecuciones
 Consultar las ejecuciones:
@@ -69,6 +79,19 @@ estado	Resultado final del pipeline
 
 Una ejecución puede finalizar correctamente con cero operaciones en la base de datos si no existen cambios que deban insertarse o actualizarse.
 
+Estados posibles:
+
+| Estado | Significado |
+|---|---|
+| EN_PROCESO | La ejecución comenzó y no ha terminado (si persiste, el proceso se interrumpió). |
+| EXITOSO | Todas las etapas terminaron correctamente. Código de salida 0. |
+| FALLIDO | Una etapa falló y el pipeline se detuvo. Código de salida 1. |
+| PARCIAL | Con detener_si_falla: false, alguna etapa falló pero las demás se ejecutaron. Código de salida 1. |
+
+Si no es posible registrar el inicio en etl_auditoria (por ejemplo, la base de datos no está disponible), el pipeline no se ejecuta y termina con código 1.
+
+Cada línea del log incluye el run_id, que coincide con la columna run_id de etl_auditoria.
+
 
 ## 7. Revisar archivos de salida
 Comprobar las carpetas del proyecto:
@@ -93,7 +116,17 @@ Comprobar:
 - Red Docker compartida.
 - Rutas de los volúmenes montados.
 Existen registros rechazados
-Revisar los archivos de data/rejected y los criterios de limpieza y validación.
+Revisar los archivos de data/rejected y los criterios de limpieza y validación:
+- registros_incompletos.csv: algún campo vacío.
+- registros_duplicados.csv: duplicados exactos.
+- registros_conflicto_clave.csv: misma clave de negocio (numero_historia, fecha, hospital_origen) con valores distintos. Se rechazan todas las versiones; deben corregirse en la fuente.
+- registros_fuera_reglas.csv: no cumplen las reglas de negocio (columna errores_validacion).
+
+Aviso de archivos no procesados
+Si el log muestra "Archivos ... que NO se procesan", hay CSV en data/raw que no están declarados en config.yaml (fuentes).
+
+Error "La migración ... fue modificada después de aplicarse"
+Se editó una migración ya aplicada. Restaurar el archivo original y crear una migración nueva con el cambio.
 
 ##9. Buenas prácticas
 - Revisar el estado final en Airflow.
@@ -107,4 +140,4 @@ Revisar los archivos de data/rejected y los criterios de limpieza y validación.
 ## 10. Reutilización
 Para operar el pipeline en otro proyecto se deben actualizar el identificador del DAG, las conexiones, la configuración, las rutas, la imagen Docker y la tabla de destino.
 
-Versión documentada: 1.0.0
+Versión documentada: 1.1.0

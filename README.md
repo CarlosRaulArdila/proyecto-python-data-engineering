@@ -56,7 +56,12 @@ Key Features
 - Containerization: Packages the ETL application in a Docker image.
 - Workflow Orchestration: Executes the ETL pipeline through Apache Airflow and DockerOperator.
 - Execution Auditing: Stores execution metadata, metrics, duration, status, and error information in PostgreSQL.
-- Logging and Error Handling: Maintains execution logs and pipeline error information.
+- Logging and Error Handling: Console and rotating file logs, with the execution `run_id` on every line.
+- Versioned Database Migrations: `sql/migraciones/` applied by `python -m src.migrar`, tracked in `public.etl_migraciones` with checksums.
+- Business-Key Conflict Detection: Records sharing `(numero_historia, fecha, hospital_origen)` with different values are quarantined instead of loaded arbitrarily.
+- Config-Driven Stages: Pipeline stages are declared in `config.yaml` (module + function) and return their metrics directly; no subprocess output parsing.
+- Reproducible Local Environment: `docker-compose.yml` with a PostgreSQL warehouse, migrations and the ETL engine.
+- Continuous Integration: GitHub Actions runs Ruff, unit tests with coverage, PostgreSQL integration tests and the Docker build.
 
 
 Project Structure
@@ -65,6 +70,9 @@ proyecto_python_data_engineering/
 │
 ├── config/
 │   └── config.yaml
+│
+├── .github/workflows/
+│   └── ci.yml
 │
 ├── dags/
 │   └── hospital_etl_dag.py
@@ -83,17 +91,26 @@ proyecto_python_data_engineering/
 │   └── operacion.md
 │
 ├── logs/
+├── sql/
+│   └── migraciones/        # V001__..., V002__..., V003__...
 ├── src/
 ├── tests/
+│   ├── datos/              # sample CSV fixtures
+│   └── integracion/        # PostgreSQL end-to-end tests
 │
 ├── .dockerignore
-├── .env
+├── .env                    # local only, never committed
+├── .env.example
 ├── .gitignore
+├── CHANGELOG.md
+├── docker-compose.yml
 ├── Dockerfile
 ├── ejecutar_pipeline.bat
 ├── pytest.ini
 ├── README.md
-└── requirements.txt
+├── requirements.txt
+├── requirements-dev.txt
+└── ruff.toml
 
 
 Installation and Local Development
@@ -109,13 +126,15 @@ conda activate data_engineering
 
 3. Install dependencies
 
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # includes requirements.txt + pytest + ruff
 
 
 4. Configure environment variables
-Create a .env file in the project root with the database connection settings required by the local execution configuration.
+Copy the template and replace the values:
 
-Example:
+cp .env.example .env
+
+Main variables:
 
 DB_HOST=localhost
 DB_PORT=5434
@@ -131,21 +150,33 @@ Never commit .env or expose database credentials.
 
 5. Generate synthetic data
 
-python src/generar_datos.py
+python -m src.generar_datos
 
-6. Create the database table
+6. Apply the database migrations (idempotent)
 
-python src/crear_tabla.py
+python -m src.migrar
 
 7. Execute the pipeline locally
 
-python src/ejecutar_pipeline.py
+python -m src.ejecutar_pipeline
+
+All modules are run from the project root with `python -m src.<module>`.
 
 The local execution requires a running PostgreSQL instance, the target database, and valid environment variables.
+
+Alternative: self-contained Docker Compose environment
+
+docker compose up -d warehouse
+docker compose run --rm migraciones
+docker compose run --rm etl
+
+The compose warehouse listens on host port 5435 by default (`WAREHOUSE_PORT`) to avoid clashing with the Airflow warehouse on 5434.
 Docker and Airflow Execution
 The project includes a Docker image for executing the ETL application:
 
-docker build -t hospital-etl:1.0 .
+docker build --build-arg ETL_VERSION=1.1.0 -t hospital-etl:1.1.0 .
+
+The DAG runs two tasks with this image: `aplicar_migraciones` >> `ejecutar_pipeline_etl`. Rebuild the image after updating the code.
 
 The Airflow environment is maintained separately and uses Docker Compose.
 
@@ -172,7 +203,15 @@ Run the automated test suite:
 
 pytest -v
 
-The validated test suite currently contains 22 passing tests.
+Lint:
+
+ruff check .
+
+Integration tests (require a disposable PostgreSQL database whose name ends in `_test`; they drop and recreate the project tables):
+
+RUN_INTEGRATION_TESTS=1 DB_NAME=hospital_dw_test pytest -v -m integracion
+
+The suite contains 54 unit tests and 3 PostgreSQL integration tests (migration of a v1.0 database, full load + idempotent rerun + incremental update, and audited failure).
 Validated Execution Results
 The initial synthetic dataset contains 15 records from three hospital sources.
 Metric	Result
@@ -183,7 +222,7 @@ Rejected records	3
 Incomplete records rejected	2
 Duplicate records rejected	1
 Database operations on unchanged rerun	0
-Automated tests passed	22
+Automated tests passed	57 (54 unit + 3 integration)
 
 The integrated execution through Apache Airflow and Docker has been validated successfully.
 
@@ -237,5 +276,5 @@ Future Improvements
 - Infrastructure and deployment automation.
 
 
-Project version: 1.0.0
-Status: Core ETL, incremental loading, Docker execution, Airflow orchestration, auditing, and automated tests validated.
+Project version: 1.1.0
+Status: Phase 1 (stabilization) completed: versioned migrations, reproducible environment, config-driven stages, robust auditing, CI. See CHANGELOG.md.

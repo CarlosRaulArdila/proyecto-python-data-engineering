@@ -6,10 +6,13 @@ import pandas as pd
 import pytest
 
 from src.cargar_incremental import (
-    preparar_datos,
+    cargar_incremental,
     construir_consulta,
-    cargar_incremental
+    preparar_datos,
 )
+
+TABLA_PRUEBAS = "pruebas_etl.hospital_registros"
+PERMITIDAS = {TABLA_PRUEBAS}
 
 
 def test_preparar_datos(tmp_path):
@@ -37,9 +40,7 @@ def test_preparar_datos(tmp_path):
 
 def test_construir_consulta_tabla_permitida():
 
-    consulta = construir_consulta(
-        "pruebas_etl.hospital_registros"
-    )
+    consulta = construir_consulta(TABLA_PRUEBAS, PERMITIDAS)
 
     assert "INSERT INTO pruebas_etl.hospital_registros" in str(consulta)
     assert "ON CONFLICT" in str(consulta)
@@ -70,8 +71,53 @@ def test_cargar_incremental():
     operaciones = cargar_incremental(
         df,
         conexion,
-        "pruebas_etl.hospital_registros"
+        TABLA_PRUEBAS,
+        PERMITIDAS
     )
 
     assert operaciones == 1
     conexion.execute.assert_called_once()
+
+
+def test_tabla_por_defecto_es_la_configurada():
+
+    consulta = construir_consulta("public.hospital_registros")
+
+    assert "INSERT INTO public.hospital_registros" in str(consulta)
+    assert "fecha_actualizacion = CURRENT_TIMESTAMP" in str(consulta)
+
+
+def test_rechazar_identificador_sospechoso():
+
+    tabla = "public.x; DROP TABLE y"
+
+    with pytest.raises(ValueError):
+        construir_consulta(tabla, {tabla})
+
+
+def test_preparar_datos_normaliza_enteros(tmp_path):
+
+    archivo = tmp_path / "datos.csv"
+    archivo.write_text(
+        "numero_historia,fecha,edad,especialidad,tecnica_anestesica,"
+        "duracion_minutos,hospital_origen\n"
+        "002001,2026-01-15,33.0,Cirugia,General,80.0,Hospital 2\n",
+        encoding="utf-8-sig",
+    )
+
+    df = preparar_datos(archivo)
+
+    assert df.loc[0, "edad"] == 33
+    assert str(df["edad"].dtype) == "int64"
+    assert str(df["duracion_minutos"].dtype) == "int64"
+    assert df.loc[0, "numero_historia"] == "002001"
+
+
+def test_cargar_incremental_sin_registros():
+
+    conexion = Mock()
+
+    operaciones = cargar_incremental(pd.DataFrame(), conexion, TABLA_PRUEBAS, PERMITIDAS)
+
+    assert operaciones == 0
+    conexion.execute.assert_not_called()

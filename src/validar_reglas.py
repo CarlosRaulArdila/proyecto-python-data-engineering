@@ -1,12 +1,19 @@
+"""
+Etapa 3 - Validación: aplica las reglas de negocio y separa los
+registros que no las cumplen, indicando el motivo.
+"""
+
+import logging
 
 import pandas as pd
 
-from src.configuracion import BASE_DIR, CONFIG
+from src.configuracion import CONFIG, resolver_ruta
 
+logger = logging.getLogger(__name__)
 
 # Obtener rutas desde config.yaml
-PROCESSED_DIR = BASE_DIR / CONFIG["rutas"]["processed"]
-REJECTED_DIR = BASE_DIR / CONFIG["rutas"]["rejected"]
+PROCESSED_DIR = resolver_ruta(CONFIG["rutas"]["processed"])
+REJECTED_DIR = resolver_ruta(CONFIG["rutas"]["rejected"])
 
 # Obtener nombres de archivos desde config.yaml
 ARCHIVO_ENTRADA = PROCESSED_DIR / CONFIG["archivos"]["limpios"]
@@ -53,6 +60,8 @@ def validar_datos(df):
 
         if pd.isna(edad) or not 0 <= edad <= 120:
             errores.append("Edad fuera del rango permitido")
+        elif edad != int(edad):
+            errores.append("Edad no es un número entero")
 
         # Validar duración
         duracion = pd.to_numeric(
@@ -62,6 +71,8 @@ def validar_datos(df):
 
         if pd.isna(duracion) or duracion <= 0:
             errores.append("Duración inválida")
+        elif duracion != int(duracion):
+            errores.append("Duración no es un número entero")
 
         # Validar especialidad
         if fila["especialidad"] not in ESPECIALIDADES_VALIDAS:
@@ -95,51 +106,41 @@ def validar_datos(df):
     return df_validos, df_rechazados
 
 
-def ejecutar_validacion():
+def ejecutar_validacion() -> dict:
+    """Ejecuta la etapa y devuelve sus métricas para la auditoría."""
 
-    # Crear carpetas si no existen
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     REJECTED_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Verificar archivo de entrada
     if not ARCHIVO_ENTRADA.exists():
         raise FileNotFoundError(
             f"No se encontró el archivo de datos limpios: {ARCHIVO_ENTRADA}"
         )
 
-    # Leer datos limpios
     df = pd.read_csv(
-        ARCHIVO_ENTRADA,
-        dtype={"numero_historia": str}
+        ARCHIVO_ENTRADA, dtype={"numero_historia": str}, encoding="utf-8-sig"
     )
 
-    # Aplicar reglas de negocio
     df_validos, df_rechazados = validar_datos(df)
 
-    # Guardar resultados
-    df_validos.to_csv(
-        ARCHIVO_VALIDOS,
-        index=False,
-        encoding="utf-8-sig"
+    df_validos.to_csv(ARCHIVO_VALIDOS, index=False, encoding="utf-8-sig")
+    df_rechazados.to_csv(ARCHIVO_RECHAZADOS, index=False, encoding="utf-8-sig")
+
+    logger.info(
+        "Validación completada | Originales: %s | Válidos: %s | Rechazados: %s",
+        len(df),
+        len(df_validos),
+        len(df_rechazados),
     )
 
-    df_rechazados.to_csv(
-        ARCHIVO_RECHAZADOS,
-        index=False,
-        encoding="utf-8-sig"
-    )
-
-    # Mostrar resumen
-    print("\nVALIDACIÓN DE REGLAS DE NEGOCIO")
-    print("--------------------------------")
-    print(f"Registros originales: {len(df)}")
-    print(f"Registros válidos: {len(df_validos)}")
-    print(f"Registros rechazados: {len(df_rechazados)}")
-
-    print("\nProceso finalizado.")
-    print(f"Archivo de válidos: {ARCHIVO_VALIDOS}")
-    print(f"Archivo de rechazados: {ARCHIVO_RECHAZADOS}")
+    return {
+        "registros_validos": len(df_validos),
+        "registros_rechazados": len(df_rechazados),
+    }
 
 
 if __name__ == "__main__":
+    from src.registro_logs import configurar_logging
+
+    configurar_logging()
     ejecutar_validacion()

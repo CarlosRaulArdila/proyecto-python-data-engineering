@@ -1,39 +1,39 @@
+"""
+Perfilado rápido de los archivos CSV de la carpeta raw.
+
+Uso:
+    python -m src.inspeccionar_datos
+"""
 
 import pandas as pd
-from pathlib import Path
 
-# Directorios del proyecto
-PROJECT_DIR = Path(__file__).resolve().parent.parent
-RAW_DIR = PROJECT_DIR / "data" / "raw"
+from src.configuracion import CONFIG, resolver_ruta
 
-# Buscar todos los archivos CSV
-archivos = list(RAW_DIR.glob("*.csv"))
+RAW_DIR = resolver_ruta(CONFIG["rutas"]["raw"])
 
-# Inspeccionar cada archivo
-for archivo in archivos:
 
-    print("\n" + "=" * 50)
-    print(f"HOSPITAL: {archivo.name}")
-    print("=" * 50)
+def inspeccionar(raw_dir=RAW_DIR):
+    for archivo in sorted(raw_dir.glob("*.csv")):
+        print("\n" + "=" * 50)
+        print(f"ARCHIVO: {archivo.name}")
+        print("=" * 50)
 
-    # Leer archivo CSV
-    df = pd.read_csv(archivo, dtype={"numero_historia": str})
+        df = pd.read_csv(archivo, dtype={"numero_historia": str}, encoding="utf-8-sig")
 
-    # Mostrar dimensiones
-    print(f"\nNúmero de registros: {df.shape[0]}")
-    print(f"Número de columnas: {df.shape[1]}")
+        print(f"\nNúmero de registros: {df.shape[0]}")
+        print(f"Número de columnas: {df.shape[1]}")
 
-    # Mostrar nombres de columnas
-    print("\nColumnas:")
-    print(df.columns.tolist())
+        print("\nColumnas:")
+        print(df.columns.tolist())
 
-    # Mostrar valores vacíos
-    print("\nValores vacíos por columna:")
-    print(df.isnull().sum())
+        print("\nValores vacíos por columna:")
+        print(df.isnull().sum())
 
-    # Mostrar registros duplicados
-    print(f"\nRegistros duplicados: {df.duplicated().sum()}")
+        print(f"\nRegistros duplicados: {df.duplicated().sum()}")
 
-    # Mostrar primeras filas
-    print("\nPrimeros registros:")
-    print(df.head())
+        print("\nPrimeros registros:")
+        print(df.head())
+
+
+if __name__ == "__main__":
+    inspeccionar()

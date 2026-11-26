@@ -1,505 +1,223 @@
+"""
+Orquestador del pipeline ETL.
 
-import subprocess
-import sys
+Ejecuta, en el orden de config.yaml (pipeline.tareas), las funciones
+de cada etapa dentro del mismo proceso. Cada etapa devuelve un
+diccionario de métricas, que el orquestador acumula y registra en
+public.etl_auditoria.
+
+Antes se lanzaba un subproceso por etapa y las métricas se obtenían
+leyendo su salida estándar con expresiones regulares y comparando
+nombres de archivo. Ahora:
+- Añadir una etapa nueva es declarar módulo y función en config.yaml.
+- Las métricas no dependen del texto que imprima cada etapa.
+- El aislamiento del proceso lo proporciona el contenedor Docker.
+
+Uso:
+    python -m src.ejecutar_pipeline
+
+Código de salida: 0 si la ejecución es EXITOSA, 1 en cualquier otro caso.
+"""
+
+import importlib
 import logging
-import time
-import csv
-import re
 import os
+import sys
+import time
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 
-from pathlib import Path
-from logging.handlers import RotatingFileHandler
+from src import auditoria
+from src.conexion_db import cerrar_engine
+from src.configuracion import CONFIG
+from src.registro_logs import configurar_logging
 
-try:
-    from src.configuracion import BASE_DIR, CONFIG
-    from src.auditoria import registrar_inicio, registrar_fin
-except ModuleNotFoundError:
-    from configuracion import BASE_DIR, CONFIG
-    from auditoria import registrar_inicio, registrar_fin
+logger = logging.getLogger(__name__)
 
-
-# ============================================================
-# 1. CONFIGURACIÓN GENERAL DEL PROYECTO
-# ============================================================
-
-DIRECTORIO_PROYECTO = BASE_DIR
-
-DIRECTORIO_LOGS = BASE_DIR / CONFIG["rutas"]["logs"]
-DIRECTORIO_PROCESADOS = BASE_DIR / CONFIG["rutas"]["processed"]
-DIRECTORIO_RECHAZADOS = BASE_DIR / CONFIG["rutas"]["rejected"]
-
-DIRECTORIO_LOGS.mkdir(
-    parents=True,
-    exist_ok=True
+# Métricas que se registran en etl_auditoria
+METRICAS = (
+    "registros_extraidos",
+    "registros_limpios",
+    "registros_rechazados",
+    "operaciones_bd",
 )
 
-
-# ============================================================
-# 2. CONFIGURACIÓN DEL SISTEMA DE LOGS
-# ============================================================
-
-CONFIG_LOGS = CONFIG["logging"]
-
-ruta_log = DIRECTORIO_LOGS / CONFIG_LOGS["archivo"]
-
-nivel_log = getattr(
-    logging,
-    CONFIG_LOGS["nivel"].upper(),
-    logging.INFO
-)
-
-logger = logging.getLogger()
-logger.setLevel(nivel_log)
-
-handler = RotatingFileHandler(
-    ruta_log,
-    maxBytes=CONFIG_LOGS["max_bytes"],
-    backupCount=CONFIG_LOGS["backup_count"],
-    encoding=CONFIG_LOGS["encoding"]
-)
-
-formatter = logging.Formatter(
-    "%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
-
-handler.setFormatter(formatter)
-
-if not any(
-    isinstance(h, RotatingFileHandler)
-    and h.baseFilename == handler.baseFilename
-    for h in logger.handlers
-):
-    logger.addHandler(handler)
-else:
-    handler.close()
+# Métricas que se suman entre etapas (el resto conserva el último valor)
+METRICAS_ACUMULABLES = {"registros_rechazados", "operaciones_bd"}
 
 
-# ============================================================
-# 3. TAREAS DEL PIPELINE
-# ============================================================
-
-TAREAS = CONFIG["pipeline"]["tareas"]
-
-
-# ============================================================
-# 4. NOMBRES DE ARCHIVOS DESDE CONFIG.YAML
-# ============================================================
-
-ARCHIVOS = CONFIG["archivos"]
+@dataclass(frozen=True)
+class Tarea:
+    nombre: str
+    funcion: Callable[[], dict | None]
 
 
-# ============================================================
-# 5. CONTAR REGISTROS DE UN ARCHIVO CSV
-# ============================================================
+def resolver_tarea(definicion: dict) -> Tarea:
+    """
+    Convierte una entrada de pipeline.tareas en una tarea ejecutable.
 
-def contar_registros(ruta_archivo):
+    Formato esperado en config.yaml:
+        - nombre: "consolidar"
+          modulo: "src.consolidar_datos"
+          funcion: "ejecutar_consolidacion"
+    """
 
-    with open(
-        ruta_archivo,
-        mode="r",
-        encoding="utf-8-sig",
-        newline=""
-    ) as archivo:
-
-        lector = csv.DictReader(archivo)
-
-        return sum(1 for fila in lector)
-
-
-# ============================================================
-# 6. EXTRAER OPERACIONES DE LA SALIDA DEL SCRIPT
-# ============================================================
-
-def obtener_operaciones_bd(salida):
-
-    patron = (
-        r"Operaciones realizadas "
-        r"\(insertados o actualizados\):\s*(\d+)"
-    )
-
-    coincidencia = re.search(
-        patron,
-        salida,
-        flags=re.IGNORECASE
-    )
-
-    if not coincidencia:
+    if not isinstance(definicion, dict):
         raise ValueError(
-            "No se pudo identificar el número de operaciones "
-            "realizadas en PostgreSQL."
+            f"Definición de tarea no válida: {definicion!r}. "
+            "Cada tarea debe declarar 'nombre', 'modulo' y 'funcion' "
+            "(ver config/config.yaml)."
         )
 
-    return int(coincidencia.group(1))
+    faltantes = [c for c in ("nombre", "modulo", "funcion") if c not in definicion]
+
+    if faltantes:
+        raise ValueError(f"A la tarea {definicion!r} le faltan las claves: {faltantes}")
+
+    modulo = importlib.import_module(definicion["modulo"])
+    funcion = getattr(modulo, definicion["funcion"], None)
+
+    if not callable(funcion):
+        raise ValueError(
+            f"La función {definicion['funcion']} no existe en {definicion['modulo']}"
+        )
+
+    return Tarea(nombre=definicion["nombre"], funcion=funcion)
 
 
-# ============================================================
-# 7. EJECUCIÓN DEL PIPELINE
-# ============================================================
+def acumular_metricas(totales: dict, nuevas: dict | None) -> dict:
+    """Incorpora las métricas devueltas por una etapa."""
 
-def ejecutar_pipeline():
+    for clave, valor in (nuevas or {}).items():
+        if clave not in METRICAS:
+            continue
+
+        if clave in METRICAS_ACUMULABLES:
+            totales[clave] = totales.get(clave, 0) + int(valor)
+        else:
+            totales[clave] = int(valor)
+
+    return totales
+
+
+def obtener_contexto() -> dict:
+    """Identificación de la ejecución (variables de entorno > config.yaml)."""
+
+    proyecto = CONFIG["proyecto"]
+    pipeline = CONFIG["pipeline"]
+
+    return {
+        "proyecto_id": proyecto["nombre"],
+        "pipeline_id": os.getenv("ETL_PIPELINE_ID", pipeline.get("id", "pipeline_principal")),
+        "orquestador": os.getenv("ETL_ORCHESTRATOR", "manual"),
+        "version_pipeline": os.getenv("ETL_PIPELINE_VERSION", proyecto.get("version", "0.0.0")),
+        "ambiente": os.getenv("ETL_ENVIRONMENT", proyecto.get("entorno", "desarrollo")),
+    }
+
+
+def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
+    """Ejecuta el pipeline completo con auditoría. Devuelve el código de salida."""
 
     inicio = time.perf_counter()
-
-    print("\n===================================")
-    print("INICIANDO PIPELINE ETL")
-    print("===================================")
-
-    logger.info("INICIO DEL PIPELINE ETL")
-
-    # --------------------------------------------------------
-    # 7.1. IDENTIFICAR LA EJECUCIÓN
-    # --------------------------------------------------------
-
     run_id = str(uuid.uuid4())
+    ruta_log = configurar_logging(run_id)
+    contexto = obtener_contexto()
 
-    orquestador = os.getenv(
-        "ETL_ORCHESTRATOR",
-        "manual"
-    )
+    detener_si_falla = CONFIG["pipeline"].get("detener_si_falla", True)
 
-    pipeline_id = os.getenv(
-        "ETL_PIPELINE_ID",
-        CONFIG["pipeline"].get(
-            "id",
-            "pipeline_principal"
-        )
-    )
+    metricas = dict.fromkeys(METRICAS, 0)
+    errores: list[str] = []
+    id_ejecucion = None
+    estado = auditoria.ESTADO_FALLIDO
 
-    version_pipeline = os.getenv(
-        "ETL_PIPELINE_VERSION",
-        CONFIG["proyecto"].get(
-            "version",
-            "1.0.0"
-        )
-    )
-
-    ambiente = os.getenv(
-        "ETL_ENVIRONMENT",
-        CONFIG["proyecto"]["entorno"]
-    )
-
-    # --------------------------------------------------------
-    # 7.2. REGISTRAR INICIO DE AUDITORÍA
-    # --------------------------------------------------------
-
-    id_ejecucion = registrar_inicio(
-        run_id=run_id,
-        proyecto_id=CONFIG["proyecto"]["nombre"],
-        pipeline_id=pipeline_id,
-        orquestador=orquestador,
-        version_pipeline=version_pipeline,
-        ambiente=ambiente,
-        archivo_log=str(ruta_log)
-    )
-
-    logger.info(
-        f"Auditoría iniciada | ID: {id_ejecucion}"
-    )
-
-    logger.info(f"RUN ID: {run_id}")
-    logger.info(f"Proyecto: {CONFIG['proyecto']['nombre']}")
-    logger.info(f"Pipeline: {pipeline_id}")
-    logger.info(f"Orquestador: {orquestador}")
-    logger.info(f"Versión: {version_pipeline}")
-    logger.info(f"Ambiente: {ambiente}")
-    logger.info(f"Archivo de log: {ruta_log}")
-
-    print(f"RUN ID: {run_id}")
-    print(f"Orquestador: {orquestador}")
-
-    # --------------------------------------------------------
-    # 7.3. INICIALIZAR MÉTRICAS
-    # --------------------------------------------------------
-
-    registros_extraidos = 0
-    registros_limpios = 0
-    registros_rechazados = 0
-    operaciones_bd = 0
-
-    estado = "EXITOSO"
-    mensaje_error = None
-
-    # --------------------------------------------------------
-    # 7.4. EJECUTAR LAS TAREAS
-    # --------------------------------------------------------
+    logger.info("INICIO DEL PIPELINE ETL | %s", contexto)
 
     try:
+        # Si no se puede auditar, no se ejecuta: la trazabilidad es obligatoria
+        id_ejecucion = auditoria.registrar_inicio(
+            run_id=run_id,
+            archivo_log=str(ruta_log),
+            **contexto,
+        )
+        logger.info("Auditoría iniciada | ID: %s", id_ejecucion)
 
-        for tarea in TAREAS:
+        if tareas is None:
+            tareas = [resolver_tarea(t) for t in CONFIG["pipeline"]["tareas"]]
 
-            nombre_modulo = Path(tarea).stem
-
-            print(f"\nEjecutando: {tarea}")
-
-            logger.info(f"Iniciando tarea: {tarea}")
-
+        for tarea in tareas:
             inicio_tarea = time.perf_counter()
+            logger.info("Iniciando tarea: %s", tarea.nombre)
 
-            resultado = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    f"src.{nombre_modulo}"
-                ],
-                cwd=DIRECTORIO_PROYECTO,
-                check=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace"
-            )
+            try:
+                resultado = tarea.funcion()
 
-            # ------------------------------------------------
-            # 7.5. REGISTRAR SALIDA DEL SCRIPT
-            # ------------------------------------------------
+            except Exception as error:
+                logger.exception("La tarea %s ha fallado", tarea.nombre)
+                errores.append(f"{tarea.nombre}: {error}")
 
-            if resultado.stdout:
+                if detener_si_falla:
+                    raise
 
-                print(resultado.stdout, end="")
+                continue
 
-                logger.info(
-                    f"Salida de {tarea}:\n"
-                    f"{resultado.stdout.strip()}"
-                )
-
-            if resultado.stderr:
-
-                print(
-                    resultado.stderr,
-                    end="",
-                    file=sys.stderr
-                )
-
-                logger.warning(
-                    f"Salida de error de {tarea}:\n"
-                    f"{resultado.stderr.strip()}"
-                )
-
-            # ------------------------------------------------
-            # 7.6. CONTABILIZAR REGISTROS EXTRAÍDOS
-            # ------------------------------------------------
-
-            if tarea == "consolidar_datos.py":
-
-                ruta_consolidados = (
-                    DIRECTORIO_PROCESADOS
-                    / ARCHIVOS["consolidados"]
-                )
-
-                registros_extraidos = contar_registros(
-                    ruta_consolidados
-                )
-
-                logger.info(
-                    f"Registros extraídos: {registros_extraidos}"
-                )
-
-            # ------------------------------------------------
-            # 7.7. CONTABILIZAR REGISTROS LIMPIOS Y RECHAZADOS
-            # ------------------------------------------------
-
-            if tarea == "limpiar_datos.py":
-
-                ruta_limpios = (
-                    DIRECTORIO_PROCESADOS
-                    / ARCHIVOS["limpios"]
-                )
-
-                registros_limpios = contar_registros(
-                    ruta_limpios
-                )
-
-                ruta_incompletos = (
-                    DIRECTORIO_RECHAZADOS
-                    / ARCHIVOS["incompletos"]
-                )
-
-                ruta_duplicados = (
-                    DIRECTORIO_RECHAZADOS
-                    / ARCHIVOS["duplicados"]
-                )
-
-                registros_rechazados = (
-                    contar_registros(ruta_incompletos)
-                    + contar_registros(ruta_duplicados)
-                )
-
-                logger.info(
-                    f"Registros limpios: {registros_limpios}"
-                )
-
-                logger.info(
-                    "Registros rechazados durante limpieza: "
-                    f"{registros_rechazados}"
-                )
-
-            # ------------------------------------------------
-            # 7.8. SUMAR RECHAZADOS POR REGLAS DE VALIDACIÓN
-            # ------------------------------------------------
-
-            if tarea == "validar_reglas.py":
-
-                ruta_fuera_reglas = (
-                    DIRECTORIO_RECHAZADOS
-                    / ARCHIVOS["fuera_reglas"]
-                )
-
-                rechazados_validacion = contar_registros(
-                    ruta_fuera_reglas
-                )
-
-                registros_rechazados += rechazados_validacion
-
-                logger.info(
-                    "Registros rechazados por reglas: "
-                    f"{rechazados_validacion}"
-                )
-
-                logger.info(
-                    f"Total de registros rechazados: "
-                    f"{registros_rechazados}"
-                )
-
-            # ------------------------------------------------
-            # 7.9. CONTABILIZAR OPERACIONES EN POSTGRESQL
-            # ------------------------------------------------
-
-            if tarea == "cargar_incremental.py":
-
-                operaciones_bd = obtener_operaciones_bd(
-                    resultado.stdout
-                )
-
-                logger.info(
-                    f"Operaciones realizadas en PostgreSQL: "
-                    f"{operaciones_bd}"
-                )
-
-            # ------------------------------------------------
-            # 7.10. REGISTRAR DURACIÓN DE CADA TAREA
-            # ------------------------------------------------
-
-            duracion_tarea = (
-                time.perf_counter() - inicio_tarea
-            )
-
-            print(f"Correcto: {tarea}")
+            acumular_metricas(metricas, resultado)
 
             logger.info(
-                f"Tarea completada: {tarea} | "
-                f"Duración: {duracion_tarea:.2f} segundos"
+                "Tarea completada: %s | Duración: %.2f s | Métricas: %s",
+                tarea.nombre,
+                time.perf_counter() - inicio_tarea,
+                resultado or {},
             )
 
-        # ----------------------------------------------------
-        # 7.11. FINALIZACIÓN EXITOSA
-        # ----------------------------------------------------
-
-        duracion_total = time.perf_counter() - inicio
-
-        registrar_fin(
-            id_ejecucion=id_ejecucion,
-            estado="EXITOSO",
-            registros_extraidos=registros_extraidos,
-            registros_limpios=registros_limpios,
-            registros_rechazados=registros_rechazados,
-            operaciones_bd=operaciones_bd,
-            duracion_segundos=duracion_total,
-            mensaje_error=None
-        )
-
-        logger.info(
-            f"Auditoría finalizada correctamente | "
-            f"ID: {id_ejecucion} | RUN ID: {run_id}"
-        )
-
-        logger.info(
-            f"PIPELINE FINALIZADO | "
-            f"Duración total: {duracion_total:.2f} segundos"
-        )
-
-        print("\n===================================")
-        print("PIPELINE ETL FINALIZADO")
-        print(f"Registros extraídos: {registros_extraidos}")
-        print(f"Registros limpios: {registros_limpios}")
-        print(f"Registros rechazados: {registros_rechazados}")
-        print(f"Operaciones en PostgreSQL: {operaciones_bd}")
-        print(f"Duración: {duracion_total:.2f} segundos")
-        print("Estado: EXITOSO")
-        print("===================================")
-
-        return 0
-
-    # --------------------------------------------------------
-    # 7.12. GESTIONAR ERRORES DEL PIPELINE
-    # --------------------------------------------------------
+        estado = auditoria.ESTADO_PARCIAL if errores else auditoria.ESTADO_EXITOSO
 
     except Exception as error:
+        estado = auditoria.ESTADO_FALLIDO
 
-        estado = "FALLIDO"
-        mensaje_error = str(error)
+        if id_ejecucion is None:
+            logger.exception(
+                "No fue posible registrar el inicio en la auditoría. "
+                "El pipeline no se ejecutó."
+            )
+        elif errores:
+            # El detalle ya se registró al fallar la tarea
+            logger.error("El pipeline ETL ha fallado.")
+        else:
+            logger.exception("El pipeline ETL ha fallado.")
 
-        if isinstance(error, subprocess.CalledProcessError):
+        if not errores:
+            errores.append(str(error))
 
-            if error.stdout:
-                logger.error(
-                    f"Salida del script:\n{error.stdout}"
-                )
+    duracion_total = time.perf_counter() - inicio
+    mensaje_error = " | ".join(errores) or None
 
-            if error.stderr:
-                logger.error(
-                    f"Error detallado del script:\n{error.stderr}"
-                )
-
-        logger.exception(
-            "El pipeline ETL ha fallado."
-        )
-
-        duracion_total = time.perf_counter() - inicio
-
-        # ----------------------------------------------------
-        # 7.13. REGISTRAR EL FALLO EN LA AUDITORÍA
-        # ----------------------------------------------------
-
+    if id_ejecucion is not None:
         try:
-
-            registrar_fin(
+            auditoria.registrar_fin(
                 id_ejecucion=id_ejecucion,
                 estado=estado,
-                registros_extraidos=registros_extraidos,
-                registros_limpios=registros_limpios,
-                registros_rechazados=registros_rechazados,
-                operaciones_bd=operaciones_bd,
                 duracion_segundos=duracion_total,
-                mensaje_error=mensaje_error
+                mensaje_error=mensaje_error,
+                **metricas,
             )
-
-            logger.info(
-                f"Auditoría cerrada con estado FALLIDO | "
-                f"ID: {id_ejecucion} | RUN ID: {run_id}"
-            )
+            logger.info("Auditoría cerrada | ID: %s | Estado: %s", id_ejecucion, estado)
 
         except Exception:
+            logger.exception("No fue posible cerrar el registro de auditoría.")
+            estado = auditoria.ESTADO_FALLIDO
 
-            logger.exception(
-                "No fue posible cerrar el registro de auditoría."
-            )
+    logger.info(
+        "PIPELINE FINALIZADO | Estado: %s | Duración: %.2f s | Métricas: %s",
+        estado,
+        duracion_total,
+        metricas,
+    )
 
-        print("\n===================================")
-        print("PIPELINE ETL FALLIDO")
-        print(f"Error: {mensaje_error}")
-        print(f"Duración: {duracion_total:.2f} segundos")
-        print("Estado: FALLIDO")
-        print("===================================")
+    cerrar_engine()
 
-        return 1
+    return 0 if estado == auditoria.ESTADO_EXITOSO else 1
 
-
-# ============================================================
-# 8. PUNTO DE ENTRADA
-# ============================================================
 
 if __name__ == "__main__":
-
     sys.exit(ejecutar_pipeline())
