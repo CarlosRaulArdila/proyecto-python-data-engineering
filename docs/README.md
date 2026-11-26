@@ -36,11 +36,14 @@ Plantilla modular y reutilizable para construir pipelines de Ingeniería de Dato
 
 ## Estado del proyecto
 
-La versión 1.1.0 (Fase 1 - estabilización) añade migraciones SQL versionadas,
-un entorno `docker-compose` reproducible, orquestación interna sin subprocesos
-ni lectura de métricas por texto, detección de conflictos de clave de negocio,
-integración continua y pruebas de integración contra PostgreSQL.
+- **1.1.0 (Fase 1 - estabilización):** migraciones SQL versionadas, entorno
+  `docker-compose` reproducible, orquestación sin subprocesos, detección de
+  conflictos de clave, integración continua y pruebas contra PostgreSQL.
+- **2.0.0 (Fase 2 - plantilla reutilizable):** esquema, reglas, clave de negocio
+  y UPSERT declarados en `config.yaml`; ingesta incremental con linaje; un
+  esquema de PostgreSQL por proyecto y un segundo pipeline de ejemplo (ventas)
+  creado solo con configuración. Ver [Nuevo pipeline](nuevo_pipeline.md).
 
 ---
 
-Documentación: versión 1.1.0
+Documentación: versión 2.0.0

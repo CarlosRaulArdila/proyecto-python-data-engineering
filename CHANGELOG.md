@@ -3,7 +3,7 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y versionado semántico.
 
-## [Sin publicar] - Fase 2: plantilla reutilizable
+## [2.0.0] - 2026-11-25 - Fase 2: plantilla reutilizable
 
 ### Añadido
 - **Esquema (contrato de datos) en `config.yaml`**: columnas, tipo (`texto`, `entero`,
@@ -57,6 +57,16 @@ y versionado semántico.
 - La auditoría usa `base_datos.tabla_auditoria` en lugar de `public.etl_auditoria` fijo.
 - `pipeline.clave_negocio` es obligatoria y se valida al cargar la configuración.
 - Sin esquema, la lectura de CSV trata todo como texto (antes solo `numero_historia`).
+
+### Notas de actualización desde 1.1.0
+Versión mayor: el formato de `config.yaml` cambia.
+1. Secciones nuevas obligatorias: `esquema` y `pipeline.columna_fuente`
+   (`pipeline.clave_negocio` pasa a ser obligatoria). Opcionales: `reglas`,
+   `ingesta`, `migraciones`, `base_datos.tabla_archivos`, `base_datos.columna_actualizacion`.
+2. Agregar la etapa `registrar_ingesta` al final de `pipeline.tareas`.
+3. Aplicar la migración `V004` con un usuario con permisos de DDL y otorgar
+   `SELECT, INSERT` sobre `etl_archivos_procesados` al usuario de servicio.
+4. Reconstruir la imagen: `docker build --build-arg ETL_VERSION=2.0.0 -t hospital-etl:2.0.0 .`
 
 ## [1.1.0] - 2026-11-25 - Fase 1: estabilización
 

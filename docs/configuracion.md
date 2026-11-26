@@ -117,7 +117,7 @@ El archivo `.env` no debe publicarse ni compartirse.
 
 El proyecto utiliza `Dockerfile` para construir la imagen:
 
-`hospital-etl:1.1.0` (la versión se pasa con `--build-arg ETL_VERSION`)
+`hospital-etl:2.0.0` (la versión se pasa con `--build-arg ETL_VERSION`)
 
 Airflow ejecuta esta imagen mediante `DockerOperator`.
 
@@ -153,4 +153,4 @@ No incluir datos reales de pacientes en ejemplos, pruebas o documentación.
 ## 9. Estado
 
 Documento elaborado a partir de la configuración del proyecto
-hospitalario, versión 1.1.0.
+hospitalario, versión 2.0.0.
