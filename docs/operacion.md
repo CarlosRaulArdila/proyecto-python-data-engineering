@@ -116,6 +116,20 @@ FROM public.etl_auditoria
 WHERE advertencias IS NOT NULL
 ORDER BY id DESC;
 
+Historial de rechazos (tabla etl_rechazos). Motivos más frecuentes de los últimos 7 días:
+
+SELECT tipo, motivo, fuente, count(*) AS registros
+FROM public.etl_rechazos
+WHERE fecha_registro > now() - interval '7 days'
+GROUP BY 1, 2, 3
+ORDER BY registros DESC;
+
+Registros rechazados de una ejecución concreta, con sus datos originales:
+
+SELECT tipo, motivo, registro
+FROM public.etl_rechazos
+WHERE run_id = '<run_id>';
+
 Cada línea del log incluye el run_id, que coincide con la columna run_id de etl_auditoria.
 
 

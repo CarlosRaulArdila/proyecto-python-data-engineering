@@ -214,6 +214,12 @@ pipeline:
       modulo: "src.validar_reglas"
       funcion: "ejecutar_validacion"
 
+    # Guarda los rechazos en la base (antes de los umbrales, para que
+    # queden registrados aunque un umbral detenga la carga)
+    - nombre: "registrar_rechazos"
+      modulo: "src.rechazos"
+      funcion: "registrar_rechazos"
+
     # Umbrales de calidad (sección 'calidad'): va antes de la carga
     - nombre: "evaluar_calidad"
       modulo: "src.calidad"
@@ -243,6 +249,7 @@ base_datos:
   tabla_destino: "hospital_registros"
   tabla_auditoria: "etl_auditoria"
   tabla_archivos: "etl_archivos_procesados"
+  tabla_rechazos: "etl_rechazos"
 
   # El UPSERT se genera desde el esquema y pipeline.clave_negocio:
   # inserta todas las columnas del esquema y, si la clave ya existe,

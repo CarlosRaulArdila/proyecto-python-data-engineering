@@ -13,6 +13,14 @@ y versionado semántico.
   - Con `advertir`, se carga y el incumplimiento queda en la nueva columna
     `etl_auditoria.advertencias` (migraciones `V005` y `ventas/V003`).
   - Si no hubo archivos nuevos (ingesta incremental) no se evalúan los umbrales.
+- **Historial de rechazos en la base** (`src/rechazos.py`, migraciones `V006` y `ventas/V004`):
+  tabla `etl_rechazos` con `run_id`, `tipo` (`incompleto`, `duplicado`, `conflicto_clave`,
+  `regla_negocio`), `motivo`, `fuente` y el registro original en JSONB. Ya no se pierde el
+  historial al sobrescribir los CSV.
+  - Nueva etapa `registrar_rechazos`, después de validar y antes de los umbrales: los rechazos
+    quedan guardados aunque un umbral detenga la carga.
+  - Los CSV de incompletos y duplicados incluyen `motivo_rechazo`
+    (por ejemplo, `Campos obligatorios vacíos: edad`).
 - Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
   de todo lo que devolvieron (`detalle`) y la lista de `advertencias`.
 - La consolidación informa `archivos_procesados`.

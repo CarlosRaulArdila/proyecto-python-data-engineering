@@ -24,6 +24,8 @@ def test_configuracion_valida(ruta: Path):
 
     nombres = [t["nombre"] for t in config["pipeline"]["tareas"]]
     assert nombres.index("evaluar_calidad") < nombres.index("cargar_incremental")
+    assert nombres.index("validar") < nombres.index("registrar_rechazos")
+    assert nombres.index("registrar_rechazos") < nombres.index("evaluar_calidad")
 
 
 def test_existe_el_pipeline_de_ventas():

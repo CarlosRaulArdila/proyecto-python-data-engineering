@@ -61,7 +61,8 @@ def reiniciar_base(engine):
     with engine.begin() as conexion:
         conexion.execute(text(
             "DROP TABLE IF EXISTS public.hospital_registros, "
-            "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados"
+            "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados, "
+            "public.etl_rechazos"
         ))
 
 
@@ -139,7 +140,7 @@ def test_migraciones_actualizan_una_base_de_la_version_anterior(engine):
             "WHERE table_name = 'hospital_registros'"
         )).scalars())
 
-    assert versiones == [1, 2, 3, 4, 5]
+    assert versiones == [1, 2, 3, 4, 5, 6]
     assert filas == 1
     assert {"fecha_creacion", "fecha_actualizacion"} <= columnas
 
@@ -362,6 +363,9 @@ def test_umbral_de_calidad_detiene_la_carga(engine, tmp_path):
     assert estado == "FALLIDO"
     assert "20.0 %" in mensaje and "máximo permitido es 10 %" in mensaje
     assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 0
+
+    # Los rechazos que provocaron el fallo quedan guardados para investigarlos
+    assert consultar(engine, "SELECT count(*) FROM etl_rechazos")[0][0] == 3
     assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 0
 
 
@@ -385,3 +389,44 @@ def test_umbral_en_modo_advertir_carga_y_anota(engine, tmp_path):
     assert estado == "EXITOSO"
     assert "Se rechazó el 20.0 %" in advertencias
     assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12
+
+
+def test_historial_de_rechazos(engine, proyecto_temporal):
+
+    entorno, _ = proyecto_temporal
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    for _ in range(2):
+        resultado = ejecutar("src.ejecutar_pipeline", entorno)
+        assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+    filas = consultar(engine, """
+        SELECT r.tipo, r.motivo, r.fuente, r.registro->>'numero_historia'
+        FROM etl_rechazos r
+        WHERE r.run_id = (SELECT run_id FROM etl_auditoria ORDER BY id DESC LIMIT 1)
+        ORDER BY 4
+    """)
+
+    assert [tuple(f) for f in filas] == [
+        ("incompleto", "Campos obligatorios vacíos: edad", "Hospital 2", "002003"),
+        ("incompleto", "Campos obligatorios vacíos: tecnica_anestesica", "Hospital 2", "002004"),
+        ("duplicado", "Registro duplicado exacto", "Hospital 3", "003004"),
+    ]
+
+    # Cada ejecución conserva su propio historial (no se sobrescribe)
+    por_ejecucion = consultar(
+        engine, "SELECT run_id, count(*) FROM etl_rechazos GROUP BY run_id"
+    )
+    assert len(por_ejecucion) == 2
+    assert all(cantidad == 3 for _, cantidad in por_ejecucion)
+
+    # El registro original completo se conserva (el vacío queda como null)
+    registro = consultar(
+        engine,
+        "SELECT registro FROM etl_rechazos WHERE registro->>'numero_historia' = '002003' LIMIT 1",
+    )[0][0]
+
+    assert registro["edad"] is None
+    assert registro["especialidad"] == "Traumatologia"

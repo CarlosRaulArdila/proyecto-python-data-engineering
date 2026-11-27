@@ -95,7 +95,7 @@ def test_pipeline_de_ventas_solo_con_configuracion(engine, proyecto):
 
     migracion = ejecutar("src.migrar", entorno)
     assert "Creando el esquema ventas" in migracion.stdout
-    assert "Migraciones aplicadas: [1, 2, 3]" in migracion.stdout
+    assert "Migraciones aplicadas: [1, 2, 3, 4]" in migracion.stdout
 
     # Día 1: 10 registros, 1 incompleto, 1 duplicado, 4 fuera de reglas
     copiar(raw, "tienda_norte_2026-11-24.csv", "tienda_sur_2026-11-24.csv")
@@ -110,6 +110,13 @@ def test_pipeline_de_ventas_solo_con_configuracion(engine, proyecto):
         ).scalar()
 
     assert "Se rechazó el 60.0 %" in advertencias
+
+    with engine.connect() as conexion:
+        tipos = dict(conexion.execute(text(
+            "SELECT tipo, count(*) FROM ventas.etl_rechazos GROUP BY tipo"
+        )).all())
+
+    assert tipos == {"incompleto": 1, "duplicado": 1, "regla_negocio": 4}
 
     rechazados = pd.read_csv(tmp_path / "rejected" / "registros_fuera_reglas.csv", dtype=str)
     motivos = dict(zip(rechazados["pedido_id"], rechazados["errores_validacion"], strict=True))
