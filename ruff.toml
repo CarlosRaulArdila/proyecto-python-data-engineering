@@ -7,3 +7,7 @@ select = ["E", "F", "W", "I", "B", "UP"]
 
 [lint.isort]
 known-first-party = ["src"]
+
+[lint.per-file-ignores]
+# Plantillas HTML/CSS del tablero: líneas largas aceptables
+"src/tablero.py" = ["E501"]

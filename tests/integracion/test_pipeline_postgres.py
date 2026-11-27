@@ -62,7 +62,7 @@ def reiniciar_base(engine):
         conexion.execute(text(
             "DROP TABLE IF EXISTS public.hospital_registros, "
             "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados, "
-            "public.etl_rechazos"
+            "public.etl_rechazos CASCADE"
         ))
 
 
@@ -140,7 +140,7 @@ def test_migraciones_actualizan_una_base_de_la_version_anterior(engine):
             "WHERE table_name = 'hospital_registros'"
         )).scalars())
 
-    assert versiones == [1, 2, 3, 4, 5, 6]
+    assert versiones == [1, 2, 3, 4, 5, 6, 7]
     assert filas == 1
     assert {"fecha_creacion", "fecha_actualizacion"} <= columnas
 
@@ -430,3 +430,33 @@ def test_historial_de_rechazos(engine, proyecto_temporal):
 
     assert registro["edad"] is None
     assert registro["especialidad"] == "Traumatologia"
+
+
+def test_vistas_de_operacion_y_tablero(engine, proyecto_temporal, tmp_path):
+
+    entorno, raw = proyecto_temporal
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
+
+    (raw / "hospital_2.csv").rename(raw / "oculto.tmp")
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 1
+
+    salud, ejecuciones_7d, fallidas_7d = consultar(
+        engine, "SELECT salud, ejecuciones_7d, fallidas_7d FROM vw_etl_salud"
+    )[0]
+    assert (salud, ejecuciones_7d, fallidas_7d) == ("FALLANDO", 2, 1)
+
+    dia = consultar(
+        engine, "SELECT ejecuciones, exitosas, fallidas, porcentaje_rechazo "
+        "FROM vw_etl_calidad_diaria"
+    )[0]
+    assert (dia[0], dia[1], dia[2], float(dia[3])) == (2, 1, 1, 20.0)
+
+    linaje = consultar(engine, "SELECT count(*) FROM vw_etl_linaje")[0][0]
+    assert linaje == 3
+
+    salida = tmp_path / "tablero.html"
+    resultado = ejecutar("src.tablero", {**entorno, "ETL_TABLERO_SALIDA": str(salida)})
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr

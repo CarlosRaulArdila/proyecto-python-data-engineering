@@ -16,6 +16,7 @@ del proyecto con `python -m src.<modulo>`.
 | `calidad.py` | Umbrales de calidad (`calidad` en `config.yaml`): porcentaje máximo de rechazo y mínimo de registros, con acción `fallar` o `advertir`. |
 | `rechazos.py` | Etapa `registrar_rechazos`: guarda en `etl_rechazos` cada registro rechazado de la ejecución, con tipo, motivo, fuente y el registro en JSON. |
 | `alertas.py` | Alertas al terminar cada ejecución, por correo (SMTP) o webhook (Slack, Teams, genérico). Prueba: `python -m src.alertas --prueba`. |
+| `tablero.py` | Genera el tablero HTML de operación de todos los pipelines a partir de las vistas `vw_etl_*`: `python -m src.tablero`. |
 | `registro_logs.py` | Configura los logs a consola y a archivo rotativo, con el `run_id` en cada línea. |
 | `migrar.py` | Aplica las migraciones del directorio configurado (`migraciones.directorio`), reemplaza `{{esquema}}`, crea el esquema si no existe y registra el historial en `<esquema>.etl_migraciones`. |
 | `crear_tabla.py` | **Obsoleto.** Se conserva por compatibilidad y delega en `migrar.py`. |

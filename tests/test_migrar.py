@@ -67,12 +67,15 @@ def test_marcador_de_esquema(tmp_path, monkeypatch):
 
     from src import migrar
 
-    monkeypatch.setattr(migrar, "ESQUEMA_BD", "ventas")
-    (tmp_path / "V1__a.sql").write_text("CREATE TABLE {{esquema}}.t (id int);")
+    monkeypatch.setitem(migrar.MARCADORES, "{{esquema}}", "ventas")
+    monkeypatch.setitem(migrar.MARCADORES, "{{zona_horaria}}", "America/Bogota")
+    (tmp_path / "V1__a.sql").write_text(
+        "CREATE TABLE {{esquema}}.t (d date);  -- {{zona_horaria}}"
+    )
 
     migracion = listar_migraciones(tmp_path)[0]
 
-    assert migracion.sql == "CREATE TABLE ventas.t (id int);"
+    assert migracion.sql == "CREATE TABLE ventas.t (d date);  -- America/Bogota"
 
 
 def test_directorio_inexistente(tmp_path):

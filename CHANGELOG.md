@@ -43,6 +43,16 @@ y versionado semántico.
     FALLIDO del pipeline no se duplican: ya los avisa el propio pipeline.
   - La tarea del pipeline no se reintenta automáticamente (las migraciones, sí).
   - Validado contra Airflow 2.10.3 y apache-airflow-providers-docker 3.14.0.
+- **Tablero de operación**:
+  - Vistas SQL en cada esquema (migraciones `V007` y `ventas/V005`, idénticas): `vw_etl_salud`
+    (OK, ADVERTENCIA, FALLANDO, o ATRASADO tras más de 26 h sin éxito), `vw_etl_ejecuciones`,
+    `vw_etl_calidad_diaria`, `vw_etl_rechazos_resumen` y `vw_etl_linaje`. Son la capa estable
+    para Power BI u otras herramientas.
+  - `python -m src.tablero`: página HTML autocontenida (sin recursos externos) con la salud,
+    los indicadores, las tendencias, las últimas ejecuciones, los motivos de rechazo y el
+    linaje de todos los pipelines. Modo claro y oscuro, tooltip por barra, estados con
+    ícono y texto.
+- Marcador `{{zona_horaria}}` en las migraciones (`orquestacion.zona_horaria`, por defecto UTC).
 - Dockerfile: la versión se declara después de instalar las dependencias (cambiarla ya no
   vuelve a descargar nada), caché de descargas de pip con BuildKit y tolerancia a redes
   lentas (`PIP_DEFAULT_TIMEOUT=120`, `PIP_RETRIES=10`).

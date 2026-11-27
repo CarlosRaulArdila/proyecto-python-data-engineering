@@ -72,6 +72,10 @@ The engine in `src/` contains nothing specific to hospitals. Each pipeline is de
 - One PostgreSQL schema per project, with its own migrations, audit and lineage tables.
 - Example: `pipelines/ventas/` — a retail sales pipeline built with zero new Python code. See `docs/nuevo_pipeline.md`.
 
+Operations (v2.1.0): data-quality thresholds that stop the load, rejection history in the
+database, e-mail/webhook alerts, an Airflow DAG factory with per-pipeline schedules, and an
+operations dashboard (`python -m src.tablero`) built on SQL views ready for Power BI.
+
 Run another pipeline by pointing to its configuration:
 
 ETL_CONFIG_PATH=pipelines/ventas/config.yaml python -m src.migrar

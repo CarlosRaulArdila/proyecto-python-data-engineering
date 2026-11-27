@@ -7,9 +7,9 @@ todavía no se hayan aplicado, y registra cada uno en la tabla
 <base_datos.esquema>.etl_migraciones (versión, nombre, checksum y fecha).
 
 Cada proyecto tiene su propio esquema de PostgreSQL y su propio historial
-de migraciones. Dentro de los archivos SQL puede usarse el marcador
-{{esquema}}, que se reemplaza por base_datos.esquema; así una misma
-migración sirve para cualquier proyecto.
+de migraciones. Dentro de los archivos SQL pueden usarse los marcadores
+{{esquema}} (base_datos.esquema) y {{zona_horaria}} (orquestacion.zona_horaria,
+por defecto UTC); así una misma migración sirve para cualquier proyecto.
 
 Características:
 - Idempotente: volver a ejecutarlo no hace nada si no hay migraciones nuevas.
@@ -43,7 +43,16 @@ DIRECTORIO_MIGRACIONES = resolver_ruta(
 ESQUEMA_BD = validar_identificador(CONFIG["base_datos"]["esquema"], "Esquema de base de datos")
 TABLA_CONTROL = f"{ESQUEMA_BD}.etl_migraciones"
 
-MARCADOR_ESQUEMA = "{{esquema}}"
+# Marcadores que se reemplazan dentro de los archivos SQL
+ZONA_HORARIA = CONFIG.get("orquestacion", {}).get("zona_horaria", "UTC")
+
+if not re.fullmatch(r"[A-Za-z_]+(/[A-Za-z0-9_\-+]+)*", ZONA_HORARIA):
+    raise ValueError(f"orquestacion.zona_horaria inválida: {ZONA_HORARIA!r}")
+
+MARCADORES = {
+    "{{esquema}}": ESQUEMA_BD,
+    "{{zona_horaria}}": ZONA_HORARIA,
+}
 
 PATRON_ARCHIVO = re.compile(r"^V(\d+)__([\w\-]+)\.sql$")
 
@@ -68,7 +77,12 @@ class Migracion:
 
     @property
     def sql(self) -> str:
-        return self.ruta.read_text(encoding="utf-8").replace(MARCADOR_ESQUEMA, ESQUEMA_BD)
+        contenido = self.ruta.read_text(encoding="utf-8")
+
+        for marcador, valor in MARCADORES.items():
+            contenido = contenido.replace(marcador, valor)
+
+        return contenido
 
     @property
     def checksum(self) -> str:

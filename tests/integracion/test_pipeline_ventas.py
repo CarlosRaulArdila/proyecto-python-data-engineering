@@ -95,7 +95,7 @@ def test_pipeline_de_ventas_solo_con_configuracion(engine, proyecto):
 
     migracion = ejecutar("src.migrar", entorno)
     assert "Creando el esquema ventas" in migracion.stdout
-    assert "Migraciones aplicadas: [1, 2, 3, 4]" in migracion.stdout
+    assert "Migraciones aplicadas: [1, 2, 3, 4, 5]" in migracion.stdout
 
     # Día 1: 10 registros, 1 incompleto, 1 duplicado, 4 fuera de reglas
     copiar(raw, "tienda_norte_2026-11-24.csv", "tienda_sur_2026-11-24.csv")

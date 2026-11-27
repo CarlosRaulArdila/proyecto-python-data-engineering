@@ -33,6 +33,8 @@ Remove-Item pipelines\mi_proyecto\datos_ejemplo\*
 ## 3. Migraciones
 
 - `V001__tablas_de_control_etl.sql`: **no se modifica** (usa `{{esquema}}`).
+- Las migraciones genéricas de auditoría, advertencias, rechazos y vistas de operación
+  de `pipelines/ventas/migraciones` (`V001`, `V003`, `V004`, `V005`) se copian tal cual.
 - `V002__crear_<tabla>.sql`: la tabla de destino, con
   - una columna por cada columna del esquema;
   - `fecha_creacion` y `fecha_actualizacion` (si usa `columna_actualizacion`);
@@ -63,6 +65,10 @@ GRANT SELECT, INSERT, UPDATE ON mi_proyecto.<tabla_destino> TO etl_service;
 GRANT SELECT, INSERT, UPDATE ON mi_proyecto.etl_auditoria TO etl_service;
 GRANT SELECT, INSERT ON mi_proyecto.etl_archivos_procesados TO etl_service;
 GRANT SELECT ON mi_proyecto.etl_migraciones TO etl_service;
+GRANT SELECT, INSERT ON mi_proyecto.etl_rechazos TO etl_service;
+GRANT SELECT ON mi_proyecto.vw_etl_salud, mi_proyecto.vw_etl_ejecuciones,
+  mi_proyecto.vw_etl_calidad_diaria, mi_proyecto.vw_etl_rechazos_resumen,
+  mi_proyecto.vw_etl_linaje TO etl_service;
 ```
 
 ## 6. Programarlo en Airflow

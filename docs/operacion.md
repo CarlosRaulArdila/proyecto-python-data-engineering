@@ -81,6 +81,23 @@ Con ingesta.modo: incremental, un archivo cuyo hash ya está en esta tabla se
 omite en las siguientes ejecuciones. Para forzar su reproceso, elimine su fila
 de etl_archivos_procesados (procedimiento controlado).
 
+Tablero de operación (todos los pipelines en una página):
+
+python -m src.tablero                      # reportes/tablero_operacion.html
+python -m src.tablero --dias 30
+
+El usuario de la conexión necesita SELECT sobre las vistas vw_etl_* de cada
+esquema. Para Power BI u otras herramientas de BI, conéctese a esas vistas
+(no a las tablas internas):
+
+| Vista | Contenido |
+|---|---|
+| vw_etl_salud | Estado actual por pipeline: OK, ADVERTENCIA, FALLANDO o ATRASADO (más de 26 h sin éxito) |
+| vw_etl_ejecuciones | Historial con % de rechazo, archivos procesados, errores y advertencias |
+| vw_etl_calidad_diaria | Por día (zona horaria del pipeline): ejecuciones, fallidas, volumen, % de rechazo |
+| vw_etl_rechazos_resumen | Motivos de rechazo agrupados por tipo y fuente |
+| vw_etl_linaje | Archivos de origen de cada ejecución |
+
 ## 6. Interpretación de métricas
 Campo	Significado
 registros_extraidos	Registros obtenidos de las fuentes
