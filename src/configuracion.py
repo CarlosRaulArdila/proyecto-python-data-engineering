@@ -73,9 +73,11 @@ def validar_configuracion(configuracion: dict) -> None:
             "con 'derivada: true'."
         )
 
+    from src.alertas import validar_config_alertas
     from src.calidad import validar_config_calidad
 
     validar_config_calidad(configuracion.get("calidad"))
+    validar_config_alertas(configuracion.get("alertas"))
 
     clave = configuracion["pipeline"].get("clave_negocio")
 

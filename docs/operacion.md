@@ -130,6 +130,12 @@ SELECT tipo, motivo, registro
 FROM public.etl_rechazos
 WHERE run_id = '<run_id>';
 
+Alertas: al terminar, cada ejecución con estado incluido en alertas.notificar_en
+envía un aviso con el estado, las métricas, el error o las advertencias y las
+consultas SQL para investigar. Para probar los canales:
+
+python -m src.alertas --prueba
+
 Cada línea del log incluye el run_id, que coincide con la columna run_id de etl_auditoria.
 
 

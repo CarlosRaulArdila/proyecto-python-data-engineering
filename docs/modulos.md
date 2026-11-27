@@ -15,6 +15,7 @@ del proyecto con `python -m src.<modulo>`.
 | `ingesta.py` | Descubrimiento de archivos por `archivo` o `patron`, hash SHA-256, modo incremental, manifiesto de la ejecución y etapa final `registrar_ingesta` (linaje en `etl_archivos_procesados`). |
 | `calidad.py` | Umbrales de calidad (`calidad` en `config.yaml`): porcentaje máximo de rechazo y mínimo de registros, con acción `fallar` o `advertir`. |
 | `rechazos.py` | Etapa `registrar_rechazos`: guarda en `etl_rechazos` cada registro rechazado de la ejecución, con tipo, motivo, fuente y el registro en JSON. |
+| `alertas.py` | Alertas al terminar cada ejecución, por correo (SMTP) o webhook (Slack, Teams, genérico). Prueba: `python -m src.alertas --prueba`. |
 | `registro_logs.py` | Configura los logs a consola y a archivo rotativo, con el `run_id` en cada línea. |
 | `migrar.py` | Aplica las migraciones del directorio configurado (`migraciones.directorio`), reemplaza `{{esquema}}`, crea el esquema si no existe y registra el historial en `<esquema>.etl_migraciones`. |
 | `crear_tabla.py` | **Obsoleto.** Se conserva por compatibilidad y delega en `migrar.py`. |

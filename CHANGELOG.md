@@ -21,6 +21,15 @@ y versionado semántico.
     quedan guardados aunque un umbral detenga la carga.
   - Los CSV de incompletos y duplicados incluyen `motivo_rechazo`
     (por ejemplo, `Campos obligatorios vacíos: edad`).
+- **Alertas** (`src/alertas.py`, sección `alertas`): por correo (SMTP con STARTTLS o SSL)
+  y por webhook (formatos `slack`, `teams` y `generico`), solo con la librería estándar.
+  - `notificar_en`: `FALLIDO`, `PARCIAL`, `ADVERTENCIA` (EXITOSO con advertencias), `EXITOSO`.
+  - Secretos solo en variables de entorno o `.env` (`ETL_SMTP_*`, `ETL_ALERTA_DESTINATARIOS`,
+    la URL del webhook); nunca en el YAML.
+  - Una alerta que no se puede enviar nunca hace fallar el pipeline.
+  - `python -m src.alertas --prueba` envía una alerta de ejemplo.
+- Prueba que importa cada módulo de `src/` en un proceso limpio (detecta importaciones
+  circulares).
 - Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
   de todo lo que devolvieron (`detalle`) y la lista de `advertencias`.
 - La consolidación informa `archivos_procesados`.

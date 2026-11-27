@@ -21,6 +21,10 @@ def auditoria_simulada(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(orquestador, "cerrar_engine", lambda: None)
 
+    notificaciones = []
+    monkeypatch.setattr(orquestador.alertas, "notificar", notificaciones.append)
+    fin.notificaciones = notificaciones
+
     return inicio, fin
 
 
@@ -216,3 +220,19 @@ def test_detalle_de_metricas_en_el_contexto(auditoria_simulada):
     ])
 
     assert visto == {"registros_extraidos": 7, "archivos_procesados": 2, "extraidos": 7}
+
+
+def test_se_notifica_el_resultado_de_la_ejecucion(auditoria_simulada):
+
+    _, fin = auditoria_simulada
+
+    def falla():
+        raise ValueError("archivo corrupto")
+
+    orquestador.ejecutar_pipeline([Tarea("consolidar", falla)])
+
+    resumen = fin.notificaciones[0]
+    assert resumen["estado"] == "FALLIDO"
+    assert resumen["id_ejecucion"] == 42
+    assert "consolidar: archivo corrupto" in resumen["mensaje_error"]
+    assert resumen["pipeline_id"] == "hospital_etl_pipeline"

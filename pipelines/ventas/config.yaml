@@ -112,6 +112,14 @@ calidad:
   accion: "advertir"
 
 
+# Alertas por correo (variables ETL_SMTP_* y ETL_ALERTA_DESTINATARIOS)
+alertas:
+  notificar_en: ["FALLIDO", "PARCIAL", "ADVERTENCIA"]
+  canales:
+    - tipo: "email"
+      destinatarios_env: "ETL_ALERTA_DESTINATARIOS"
+
+
 rutas:
   raw: "data/ventas/raw"
   processed: "data/ventas/processed"

@@ -25,6 +25,7 @@ Entre sus configuraciones se encuentran:
 | `esquema` | Contrato de datos: columnas en orden, `tipo` (texto, entero, decimal, fecha, booleano), `obligatoria`, `derivada`, `longitud_max` y `descripcion`. |
 | `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
 | `calidad` | Umbrales: `max_porcentaje_rechazo` (0-100), `min_registros_extraidos` y `accion` (`fallar`: no carga; `advertir`: carga y anota en `etl_auditoria.advertencias`). |
+| `alertas` | `notificar_en` (estados que generan alerta) y `canales`: `email` (`destinatarios` o `destinatarios_env`) y `webhook` (`formato`, `url_env`). Los secretos van en variables de entorno. |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
 | `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
 | `pipeline.id` | Identificador del pipeline en la auditoría. |
@@ -77,6 +78,9 @@ Variables adicionales:
 | `ETL_IMAGE_TAG` | Etiqueta de la imagen construida por `docker-compose.yml`. |
 | `ETL_PYTHON` | Intérprete que usa `ejecutar_pipeline.bat`. |
 | `RUN_INTEGRATION_TESTS` | `1` para ejecutar las pruebas de integración. |
+| `ETL_SMTP_HOST`, `ETL_SMTP_PUERTO`, `ETL_SMTP_USUARIO`, `ETL_SMTP_CLAVE`, `ETL_SMTP_REMITENTE` | Servidor de correo para las alertas. |
+| `ETL_ALERTA_DESTINATARIOS` | Destinatarios de las alertas, separados por coma. |
+| `ETL_ALERTA_WEBHOOK_URL` | URL del webhook (Slack, Teams...) si se usa ese canal. |
 
 ## 3. Conexión de Airflow
 

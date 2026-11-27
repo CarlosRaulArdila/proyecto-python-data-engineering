@@ -29,7 +29,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src import auditoria
+from src import alertas, auditoria
 from src.conexion_db import cerrar_engine
 from src.configuracion import CONFIG
 from src.registro_logs import configurar_logging
@@ -246,6 +246,21 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
 
     if advertencias:
         logger.warning("Advertencias de la ejecución: %s", texto_advertencias)
+
+    # Alertas: nunca alteran el estado ni el código de salida
+    alertas.notificar(
+        {
+            **contexto,
+            "estado": estado,
+            "run_id": run_id,
+            "id_ejecucion": id_ejecucion,
+            "duracion_segundos": duracion_total,
+            "metricas": metricas,
+            "mensaje_error": mensaje_error,
+            "advertencias": texto_advertencias,
+            "archivo_log": str(ruta_log),
+        }
+    )
 
     cerrar_engine()
 

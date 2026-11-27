@@ -154,6 +154,32 @@ calidad:
 
 
 # ============================================================
+# ALERTAS
+# ------------------------------------------------------------
+# notificar_en: estados que generan alerta
+#   FALLIDO, PARCIAL, ADVERTENCIA (= EXITOSO con advertencias), EXITOSO
+# canales:
+#   email:   SMTP. Variables de entorno (o .env): ETL_SMTP_HOST,
+#            ETL_SMTP_PUERTO, ETL_SMTP_USUARIO, ETL_SMTP_CLAVE,
+#            ETL_SMTP_REMITENTE (opcional) y los destinatarios.
+#   webhook: Slack, Teams o genérico (JSON). La URL va en la
+#            variable indicada en url_env.
+# Los secretos NUNCA se escriben en este archivo.
+# Probar la configuración:  python -m src.alertas --prueba
+# ============================================================
+
+alertas:
+  notificar_en: ["FALLIDO", "PARCIAL", "ADVERTENCIA"]
+  canales:
+    - tipo: "email"
+      destinatarios_env: "ETL_ALERTA_DESTINATARIOS"
+
+    # - tipo: "webhook"
+    #   formato: "slack"            # slack | teams | generico
+    #   url_env: "ETL_ALERTA_WEBHOOK_URL"
+
+
+# ============================================================
 # RUTAS DEL PROYECTO
 # ============================================================
 
