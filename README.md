@@ -197,9 +197,9 @@ The compose warehouse listens on host port 5435 by default (`WAREHOUSE_PORT`) to
 Docker and Airflow Execution
 The project includes a Docker image for executing the ETL application:
 
-docker build --build-arg ETL_VERSION=2.0.0 -t hospital-etl:2.0.0 .
+docker build --build-arg ETL_VERSION=2.1.0 -t hospital-etl:2.1.0 .
 
-The DAG runs two tasks with this image: `aplicar_migraciones` >> `ejecutar_pipeline_etl`. Rebuild the image after updating the code.
+The Airflow DAG factory (`dags/fabrica_pipelines_etl.py`) creates one DAG per pipeline config; each runs `aplicar_migraciones` >> `ejecutar_pipeline_etl` with this image. Rebuild the image after updating the code.
 
 The Airflow environment is maintained separately and uses Docker Compose.
 
@@ -234,7 +234,7 @@ Integration tests (require a disposable PostgreSQL database whose name ends in `
 
 RUN_INTEGRATION_TESTS=1 DB_NAME=hospital_dw_test pytest -v -m integracion
 
-The suite contains 145 unit tests and 7 PostgreSQL integration tests (migrations from v1.0, full load + idempotent rerun + update, audited failure, file lineage, incremental batches, no registration on failure, and the full sales pipeline).
+The suite contains 237 unit tests and 11 PostgreSQL integration tests (migrations from v1.0, full load + idempotent rerun + update, audited failure, file lineage, incremental batches, no registration on failure, and the full sales pipeline).
 Validated Execution Results
 The initial synthetic dataset contains 15 records from three hospital sources.
 Metric	Result
@@ -245,7 +245,7 @@ Rejected records	3
 Incomplete records rejected	2
 Duplicate records rejected	1
 Database operations on unchanged rerun	0
-Automated tests passed	152 (145 unit + 7 integration)
+Automated tests passed	248 (237 unit + 11 integration)
 
 The integrated execution through Apache Airflow and Docker has been validated successfully.
 
@@ -299,5 +299,5 @@ Future Improvements
 - Infrastructure and deployment automation.
 
 
-Project version: 2.0.0
-Status: Phase 2 (reusable template) completed: data contract, declarative rules, generated UPSERT, incremental ingestion with lineage, multi-project schemas and a second example pipeline. See CHANGELOG.md.
+Project version: 2.1.0
+Status: Phase 3 (autonomous operation) completed: quality thresholds, rejection history, e-mail/webhook alerts, Airflow DAG factory with schedules, operations views and dashboard. See CHANGELOG.md.

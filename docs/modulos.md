@@ -76,4 +76,4 @@ métricas**. El orquestador las declara en `config.yaml` (`pipeline.tareas`).
 
 ---
 
-Documentación: versión 2.0.0
+Documentación: versión 2.1.0

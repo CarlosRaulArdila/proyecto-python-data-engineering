@@ -3,7 +3,7 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y versionado semántico.
 
-## [Sin publicar] - Fase 3: operación autónoma
+## [2.1.0] - 2026-11-26 - Fase 3: operación autónoma
 
 ### Eliminado
 - `dags/hospital_etl_dag.py`: reemplazado por la fábrica (mismo `dag_id`, conserva el historial).
@@ -61,6 +61,19 @@ y versionado semántico.
 - Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
   de todo lo que devolvieron (`detalle`) y la lista de `advertencias`.
 - La consolidación informa `archivos_procesados`.
+
+### Notas de actualización desde 2.0.0
+Versión menor: las secciones nuevas de `config.yaml` son opcionales.
+1. Agregar a `pipeline.tareas`, después de `validar`, las etapas `registrar_rechazos`
+   y `evaluar_calidad` (en ese orden), y opcionalmente las secciones `calidad`,
+   `alertas` y `orquestacion`.
+2. Aplicar las migraciones con un usuario con permisos de DDL (hospital: `V005` a `V007`;
+   ventas: `V003` a `V005`) y otorgar al usuario de servicio `SELECT, INSERT` sobre
+   `etl_rechazos` y `SELECT` sobre las vistas `vw_etl_*`.
+3. Retirar `dags/hospital_etl_dag.py` y montar `config/` y `pipelines/` en el scheduler
+   (ver `docs/despliegue.md`). Opcional: Variables de Airflow `ETL_SMTP_*` y
+   `ETL_ALERTA_DESTINATARIOS` para las alertas.
+4. Reconstruir la imagen: `docker build --build-arg ETL_VERSION=2.1.0 -t hospital-etl:2.1.0 .`
 
 ## [2.0.0] - 2026-11-25 - Fase 2: plantilla reutilizable
 
