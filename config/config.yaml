@@ -137,6 +137,23 @@ reglas:
 
 
 # ============================================================
+# UMBRALES DE CALIDAD
+# ------------------------------------------------------------
+# Se evalúan después de validar y ANTES de cargar.
+#   max_porcentaje_rechazo:  % máximo de rechazados sobre los extraídos
+#   min_registros_extraidos: mínimo de registros esperados por ejecución
+#   accion: fallar   -> no carga nada; la ejecución queda FALLIDA
+#           advertir -> carga y anota la advertencia en la auditoría
+# Si no hubo archivos nuevos (ingesta incremental) no se evalúan.
+# ============================================================
+
+calidad:
+  max_porcentaje_rechazo: 30
+  min_registros_extraidos: 10
+  accion: "fallar"
+
+
+# ============================================================
 # RUTAS DEL PROYECTO
 # ============================================================
 
@@ -196,6 +213,11 @@ pipeline:
     - nombre: "validar"
       modulo: "src.validar_reglas"
       funcion: "ejecutar_validacion"
+
+    # Umbrales de calidad (sección 'calidad'): va antes de la carga
+    - nombre: "evaluar_calidad"
+      modulo: "src.calidad"
+      funcion: "evaluar_calidad"
 
     - nombre: "cargar_incremental"
       modulo: "src.cargar_incremental"

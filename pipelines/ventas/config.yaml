@@ -105,6 +105,13 @@ reglas:
     mensaje: "Canal de venta no permitido"
 
 
+# Umbrales de calidad: este ejemplo solo advierte (los datos de
+# ejemplo tienen errores a propósito: 60 % de rechazo el día 1)
+calidad:
+  max_porcentaje_rechazo: 50
+  accion: "advertir"
+
+
 rutas:
   raw: "data/ventas/raw"
   processed: "data/ventas/processed"
@@ -144,6 +151,11 @@ pipeline:
     - nombre: "validar"
       modulo: "src.validar_reglas"
       funcion: "ejecutar_validacion"
+
+    # Umbrales de calidad (sección 'calidad'): va antes de la carga
+    - nombre: "evaluar_calidad"
+      modulo: "src.calidad"
+      funcion: "evaluar_calidad"
 
     - nombre: "cargar_incremental"
       modulo: "src.cargar_incremental"

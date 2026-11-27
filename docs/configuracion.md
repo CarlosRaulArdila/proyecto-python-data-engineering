@@ -24,6 +24,7 @@ Entre sus configuraciones se encuentran:
 | `ingesta` | `modo`: `completa` (todos los archivos en cada ejecución) o `incremental` (solo archivos no cargados antes, por hash SHA-256). |
 | `esquema` | Contrato de datos: columnas en orden, `tipo` (texto, entero, decimal, fecha, booleano), `obligatoria`, `derivada`, `longitud_max` y `descripcion`. |
 | `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
+| `calidad` | Umbrales: `max_porcentaje_rechazo` (0-100), `min_registros_extraidos` y `accion` (`fallar`: no carga; `advertir`: carga y anota en `etl_auditoria.advertencias`). |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
 | `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
 | `pipeline.id` | Identificador del pipeline en la auditoría. |

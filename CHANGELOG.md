@@ -3,6 +3,20 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y versionado semántico.
 
+## [Sin publicar] - Fase 3: operación autónoma
+
+### Añadido
+- **Umbrales de calidad** (sección `calidad` y módulo `src/calidad.py`):
+  `max_porcentaje_rechazo`, `min_registros_extraidos` y `accion` (`fallar` o `advertir`).
+  - Nueva etapa `evaluar_calidad` entre la validación y la carga: con `fallar`, la
+    ejecución se detiene **antes de escribir en la base** y los archivos se reintentan.
+  - Con `advertir`, se carga y el incumplimiento queda en la nueva columna
+    `etl_auditoria.advertencias` (migraciones `V005` y `ventas/V003`).
+  - Si no hubo archivos nuevos (ingesta incremental) no se evalúan los umbrales.
+- Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
+  de todo lo que devolvieron (`detalle`) y la lista de `advertencias`.
+- La consolidación informa `archivos_procesados`.
+
 ## [2.0.0] - 2026-11-25 - Fase 2: plantilla reutilizable
 
 ### Añadido

@@ -184,3 +184,35 @@ def test_las_tareas_reciben_el_contexto_si_lo_aceptan(auditoria_simulada):
 def test_la_ultima_tarea_es_registrar_ingesta():
 
     assert orquestador.CONFIG["pipeline"]["tareas"][-1]["funcion"] == "registrar_ingesta"
+
+
+def test_advertencias_llegan_a_la_auditoria(auditoria_simulada):
+
+    _, fin = auditoria_simulada
+
+    def advierte(contexto):
+        contexto["advertencias"].append("Umbral de calidad: algo")
+        return {}
+
+    codigo = orquestador.ejecutar_pipeline([Tarea("calidad", advierte)])
+
+    assert codigo == 0
+    assert fin.call_args.kwargs["estado"] == "EXITOSO"
+    assert fin.call_args.kwargs["advertencias"] == "Umbral de calidad: algo"
+
+
+def test_detalle_de_metricas_en_el_contexto(auditoria_simulada):
+
+    visto = {}
+
+    def lee(contexto):
+        visto.update(contexto["detalle"])
+        visto["extraidos"] = contexto["metricas"]["registros_extraidos"]
+        return {}
+
+    orquestador.ejecutar_pipeline([
+        Tarea("a", lambda: {"registros_extraidos": 7, "archivos_procesados": 2}),
+        Tarea("b", lee),
+    ])
+
+    assert visto == {"registros_extraidos": 7, "archivos_procesados": 2, "extraidos": 7}

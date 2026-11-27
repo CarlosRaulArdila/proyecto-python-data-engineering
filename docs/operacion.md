@@ -103,6 +103,19 @@ Estados posibles:
 
 Si no es posible registrar el inicio en etl_auditoria (por ejemplo, la base de datos no está disponible), el pipeline no se ejecuta y termina con código 1.
 
+Umbrales de calidad (sección calidad de config.yaml):
+- Con accion: fallar, una ejecución que los supera termina FALLIDA sin cargar datos;
+  el motivo queda en mensaje_error (por ejemplo, "Se rechazó el 45.0 % ...").
+- Con accion: advertir, la ejecución termina EXITOSA y el motivo queda en la
+  columna advertencias.
+
+Ejecuciones con advertencias:
+
+SELECT id, fecha_inicio, pipeline_id, advertencias
+FROM public.etl_auditoria
+WHERE advertencias IS NOT NULL
+ORDER BY id DESC;
+
 Cada línea del log incluye el run_id, que coincide con la columna run_id de etl_auditoria.
 
 

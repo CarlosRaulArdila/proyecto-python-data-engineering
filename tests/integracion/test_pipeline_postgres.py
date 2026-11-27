@@ -139,7 +139,7 @@ def test_migraciones_actualizan_una_base_de_la_version_anterior(engine):
             "WHERE table_name = 'hospital_registros'"
         )).scalars())
 
-    assert versiones == [1, 2, 3, 4]
+    assert versiones == [1, 2, 3, 4, 5]
     assert filas == 1
     assert {"fecha_creacion", "fecha_actualizacion"} <= columnas
 
@@ -253,6 +253,8 @@ def test_ingesta_incremental_por_lotes(engine, tmp_path):
 
     def modo_incremental_con_patrones(config):
         config["ingesta"] = {"modo": "incremental"}
+        # Los lotes de esta prueba son pequeños: sin mínimo de registros
+        config["calidad"] = {"max_porcentaje_rechazo": 30, "accion": "fallar"}
         config["fuentes"] = [
             {"nombre": "Hospital 1", "patron": "hospital_1*.csv"},
             {"nombre": "Hospital 2", "patron": "hospital_2*.csv"},
@@ -335,4 +337,51 @@ def test_si_la_carga_falla_los_archivos_no_se_registran(engine, tmp_path):
     assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
 
     assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 3
+    assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12
+
+
+def test_umbral_de_calidad_detiene_la_carga(engine, tmp_path):
+
+    def umbral_estricto(config):
+        config["ingesta"] = {"modo": "incremental"}
+        config["calidad"] = {"max_porcentaje_rechazo": 10, "accion": "fallar"}
+
+    entorno, _ = crear_proyecto(tmp_path, umbral_estricto)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    # 3 de 15 rechazados = 20 % > 10 %: no debe cargarse nada
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 1
+
+    estado, mensaje = consultar(
+        engine, "SELECT estado, mensaje_error FROM etl_auditoria ORDER BY id DESC LIMIT 1"
+    )[0]
+
+    assert estado == "FALLIDO"
+    assert "20.0 %" in mensaje and "máximo permitido es 10 %" in mensaje
+    assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 0
+    assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 0
+
+
+def test_umbral_en_modo_advertir_carga_y_anota(engine, tmp_path):
+
+    def solo_advertir(config):
+        config["calidad"] = {"max_porcentaje_rechazo": 10, "accion": "advertir"}
+
+    entorno, _ = crear_proyecto(tmp_path, solo_advertir)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+    estado, advertencias = consultar(
+        engine, "SELECT estado, advertencias FROM etl_auditoria ORDER BY id DESC LIMIT 1"
+    )[0]
+
+    assert estado == "EXITOSO"
+    assert "Se rechazó el 20.0 %" in advertencias
     assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12

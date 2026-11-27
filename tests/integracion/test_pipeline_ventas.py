@@ -95,13 +95,21 @@ def test_pipeline_de_ventas_solo_con_configuracion(engine, proyecto):
 
     migracion = ejecutar("src.migrar", entorno)
     assert "Creando el esquema ventas" in migracion.stdout
-    assert "Migraciones aplicadas: [1, 2]" in migracion.stdout
+    assert "Migraciones aplicadas: [1, 2, 3]" in migracion.stdout
 
     # Día 1: 10 registros, 1 incompleto, 1 duplicado, 4 fuera de reglas
     copiar(raw, "tienda_norte_2026-11-24.csv", "tienda_sur_2026-11-24.csv")
     ejecutar("src.ejecutar_pipeline", entorno)
 
     assert ultima_auditoria(engine) == ("EXITOSO", 10, 8, 6, 4)
+
+    # 60 % de rechazo supera el 50 % configurado: en modo advertir se anota
+    with engine.connect() as conexion:
+        advertencias = conexion.execute(
+            text("SELECT advertencias FROM ventas.etl_auditoria ORDER BY id DESC LIMIT 1")
+        ).scalar()
+
+    assert "Se rechazó el 60.0 %" in advertencias
 
     rechazados = pd.read_csv(tmp_path / "rejected" / "registros_fuera_reglas.csv", dtype=str)
     motivos = dict(zip(rechazados["pedido_id"], rechazados["errores_validacion"], strict=True))
@@ -114,8 +122,9 @@ def test_pipeline_de_ventas_solo_con_configuracion(engine, proyecto):
     }
 
     # Repetición sin archivos nuevos: no se procesa nada
-    ejecutar("src.ejecutar_pipeline", entorno)
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
     assert ultima_auditoria(engine) == ("EXITOSO", 0, 0, 0, 0)
+    assert "no se evalúan los umbrales" in resultado.stdout
 
     # Día 2: un lote nuevo con un pedido nuevo y otro modificado
     copiar(raw, "tienda_norte_2026-11-25.csv")

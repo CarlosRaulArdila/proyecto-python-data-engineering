@@ -22,6 +22,9 @@ def test_configuracion_valida(ruta: Path):
     assert resolver_ruta(config["migraciones"]["directorio"]).is_dir()
     assert config["pipeline"]["tareas"][-1]["funcion"] == "registrar_ingesta"
 
+    nombres = [t["nombre"] for t in config["pipeline"]["tareas"]]
+    assert nombres.index("evaluar_calidad") < nombres.index("cargar_incremental")
+
 
 def test_existe_el_pipeline_de_ventas():
 
