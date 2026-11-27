@@ -33,6 +33,8 @@ Remove-Item pipelines\mi_proyecto\datos_ejemplo\*
 ## 3. Migraciones
 
 - `V001__tablas_de_control_etl.sql`: **no se modifica** (usa `{{esquema}}`).
+- Las migraciones genéricas de auditoría, advertencias, rechazos y vistas de operación
+  de `pipelines/ventas/migraciones` (`V001`, `V003`, `V004`, `V005`) se copian tal cual.
 - `V002__crear_<tabla>.sql`: la tabla de destino, con
   - una columna por cada columna del esquema;
   - `fecha_creacion` y `fecha_actualizacion` (si usa `columna_actualizacion`);
@@ -63,9 +65,30 @@ GRANT SELECT, INSERT, UPDATE ON mi_proyecto.<tabla_destino> TO etl_service;
 GRANT SELECT, INSERT, UPDATE ON mi_proyecto.etl_auditoria TO etl_service;
 GRANT SELECT, INSERT ON mi_proyecto.etl_archivos_procesados TO etl_service;
 GRANT SELECT ON mi_proyecto.etl_migraciones TO etl_service;
+GRANT SELECT, INSERT ON mi_proyecto.etl_rechazos TO etl_service;
+GRANT SELECT ON mi_proyecto.vw_etl_salud, mi_proyecto.vw_etl_ejecuciones,
+  mi_proyecto.vw_etl_calidad_diaria, mi_proyecto.vw_etl_rechazos_resumen,
+  mi_proyecto.vw_etl_linaje TO etl_service;
 ```
 
-## 6. Pruebas
+## 6. Programarlo en Airflow
+
+Agregue la sección `orquestacion` a su `config.yaml`:
+
+```yaml
+orquestacion:
+  activo: true
+  horario: "0 7 * * *"          # cron, o null para ejecución manual
+  zona_horaria: "America/Bogota"
+  conexion_airflow: "hospital_dw_etl"
+  etiquetas: ["mi_proyecto"]
+```
+
+Reconstruya la imagen ETL. La fábrica de DAG creará `<pipeline.id>` en Airflow
+automáticamente (aparece pausado la primera vez). Las rutas de datos deben estar
+dentro de `data/` y `logs/`, y la carpeta `raw` debe existir en el equipo.
+
+## 7. Pruebas
 
 `tests/test_pipelines_ejemplo.py` valida automáticamente la configuración de
 cada carpeta de `pipelines/`. Para una prueba de extremo a extremo, use como

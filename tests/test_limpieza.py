@@ -124,3 +124,19 @@ def test_texto_solo_con_espacios_es_incompleto():
 
     assert len(df_limpio) == 1
     assert len(df_incompletos) == 1
+
+
+def test_motivo_de_incompletos_y_duplicados():
+    datos = pd.DataFrame({
+        "numero_historia": ["001", "002", "003", "003"],
+        "edad": [None, 40, 45, 45],
+        "especialidad": [None, "   ", "Cirugia", "Cirugia"],
+    })
+
+    _, df_incompletos, df_duplicados = limpiar_datos(datos)
+
+    assert df_incompletos["motivo_rechazo"].tolist() == [
+        "Campos obligatorios vacíos: edad, especialidad",
+        "Campos obligatorios vacíos: especialidad",
+    ]
+    assert df_duplicados["motivo_rechazo"].tolist() == ["Registro duplicado exacto"]

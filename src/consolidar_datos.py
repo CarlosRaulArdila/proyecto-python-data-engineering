@@ -179,7 +179,7 @@ def ejecutar_consolidacion(contexto: dict | None = None) -> dict:
         ruta_salida,
     )
 
-    return {"registros_extraidos": len(df_consolidado)}
+    return {"registros_extraidos": len(df_consolidado), "archivos_procesados": len(archivos)}
 
 
 if __name__ == "__main__":

@@ -31,6 +31,9 @@ OUTPUT_CONFLICTOS = REJECTED_DIR / ARCHIVOS.get(
 CLAVE_NEGOCIO = CONFIG["pipeline"]["clave_negocio"]
 
 
+COLUMNA_MOTIVO = "motivo_rechazo"
+
+
 def detectar_vacios(df):
     """Marca como vacío un valor nulo o un texto compuesto solo por espacios."""
 
@@ -56,15 +59,23 @@ def limpiar_datos(df, columnas_obligatorias=None):
 
     # Separar registros incompletos (vacíos o solo espacios)
     columnas = list(columnas_obligatorias) if columnas_obligatorias else list(df.columns)
-    mascara_incompletos = detectar_vacios(df[columnas]).any(axis=1)
+    vacios = detectar_vacios(df[columnas])
+    mascara_incompletos = vacios.any(axis=1)
 
     df_incompletos = df.loc[mascara_incompletos].copy()
     df_completos = df.loc[~mascara_incompletos].copy()
+
+    # Motivo: qué columnas obligatorias están vacías en cada registro
+    df_incompletos[COLUMNA_MOTIVO] = [
+        "Campos obligatorios vacíos: " + ", ".join(fila[fila].index)
+        for _, fila in vacios.loc[mascara_incompletos].iterrows()
+    ]
 
     # Detectar duplicados exactos
     mascara_duplicados = df_completos.duplicated(keep="first")
 
     df_duplicados = df_completos.loc[mascara_duplicados].copy()
+    df_duplicados[COLUMNA_MOTIVO] = "Registro duplicado exacto"
 
     # Conservar una sola copia de cada registro
     df_limpio = df_completos.loc[~mascara_duplicados].copy()
@@ -94,7 +105,7 @@ def separar_conflictos_clave(df, clave):
     mascara = df.duplicated(subset=clave, keep=False)
 
     df_conflictos = df.loc[mascara].copy()
-    df_conflictos["motivo_rechazo"] = (
+    df_conflictos[COLUMNA_MOTIVO] = (
         "Clave de negocio repetida con valores distintos: " + ", ".join(clave)
     )
 

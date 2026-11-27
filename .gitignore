@@ -22,3 +22,6 @@ htmlcov/
 # Datos y archivos generados
 data/
 logs/
+
+# Tableros generados
+reportes/

@@ -3,6 +3,78 @@
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/)
 y versionado semántico.
 
+## [2.1.0] - 2026-11-26 - Fase 3: operación autónoma
+
+### Eliminado
+- `dags/hospital_etl_dag.py`: reemplazado por la fábrica (mismo `dag_id`, conserva el historial).
+
+### Añadido
+- **Umbrales de calidad** (sección `calidad` y módulo `src/calidad.py`):
+  `max_porcentaje_rechazo`, `min_registros_extraidos` y `accion` (`fallar` o `advertir`).
+  - Nueva etapa `evaluar_calidad` entre la validación y la carga: con `fallar`, la
+    ejecución se detiene **antes de escribir en la base** y los archivos se reintentan.
+  - Con `advertir`, se carga y el incumplimiento queda en la nueva columna
+    `etl_auditoria.advertencias` (migraciones `V005` y `ventas/V003`).
+  - Si no hubo archivos nuevos (ingesta incremental) no se evalúan los umbrales.
+- **Historial de rechazos en la base** (`src/rechazos.py`, migraciones `V006` y `ventas/V004`):
+  tabla `etl_rechazos` con `run_id`, `tipo` (`incompleto`, `duplicado`, `conflicto_clave`,
+  `regla_negocio`), `motivo`, `fuente` y el registro original en JSONB. Ya no se pierde el
+  historial al sobrescribir los CSV.
+  - Nueva etapa `registrar_rechazos`, después de validar y antes de los umbrales: los rechazos
+    quedan guardados aunque un umbral detenga la carga.
+  - Los CSV de incompletos y duplicados incluyen `motivo_rechazo`
+    (por ejemplo, `Campos obligatorios vacíos: edad`).
+- **Alertas** (`src/alertas.py`, sección `alertas`): por correo (SMTP con STARTTLS o SSL)
+  y por webhook (formatos `slack`, `teams` y `generico`), solo con la librería estándar.
+  - `notificar_en`: `FALLIDO`, `PARCIAL`, `ADVERTENCIA` (EXITOSO con advertencias), `EXITOSO`.
+  - Secretos solo en variables de entorno o `.env` (`ETL_SMTP_*`, `ETL_ALERTA_DESTINATARIOS`,
+    la URL del webhook); nunca en el YAML.
+  - Una alerta que no se puede enviar nunca hace fallar el pipeline.
+  - `python -m src.alertas --prueba` envía una alerta de ejemplo.
+- **Fábrica de DAG** (`dags/fabrica_pipelines_etl.py` y `dags/etl_fabrica_config.py`):
+  un DAG por cada `config/config.yaml` y `pipelines/*/config.yaml`, sin escribir código.
+  - Sección `orquestacion` por pipeline: `horario` (cron o null), `zona_horaria`,
+    `reintentos_migraciones`, `tiempo_maximo_minutos`, `conexion_airflow`, `etiquetas`, `activo`.
+  - Hospital programado a las 6:00 y ventas a las 6:30 (America/Bogota).
+  - Las variables de correo llegan al contenedor desde Variables de Airflow
+    (`ETL_SMTP_*`, `ETL_ALERTA_DESTINATARIOS`); si no existen, no se envía correo.
+  - Alerta de Airflow cuando una tarea falla por algo que el pipeline no pudo reportar
+    (imagen inexistente, contenedor que no arranca, tiempo agotado, migraciones). Los
+    FALLIDO del pipeline no se duplican: ya los avisa el propio pipeline.
+  - La tarea del pipeline no se reintenta automáticamente (las migraciones, sí).
+  - Validado contra Airflow 2.10.3 y apache-airflow-providers-docker 3.14.0.
+- **Tablero de operación**:
+  - Vistas SQL en cada esquema (migraciones `V007` y `ventas/V005`, idénticas): `vw_etl_salud`
+    (OK, ADVERTENCIA, FALLANDO, o ATRASADO tras más de 26 h sin éxito), `vw_etl_ejecuciones`,
+    `vw_etl_calidad_diaria`, `vw_etl_rechazos_resumen` y `vw_etl_linaje`. Son la capa estable
+    para Power BI u otras herramientas.
+  - `python -m src.tablero`: página HTML autocontenida (sin recursos externos) con la salud,
+    los indicadores, las tendencias, las últimas ejecuciones, los motivos de rechazo y el
+    linaje de todos los pipelines. Modo claro y oscuro, tooltip por barra, estados con
+    ícono y texto.
+- Marcador `{{zona_horaria}}` en las migraciones (`orquestacion.zona_horaria`, por defecto UTC).
+- Dockerfile: la versión se declara después de instalar las dependencias (cambiarla ya no
+  vuelve a descargar nada), caché de descargas de pip con BuildKit y tolerancia a redes
+  lentas (`PIP_DEFAULT_TIMEOUT=120`, `PIP_RETRIES=10`).
+- Prueba que importa cada módulo de `src/` en un proceso limpio (detecta importaciones
+  circulares).
+- Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
+  de todo lo que devolvieron (`detalle`) y la lista de `advertencias`.
+- La consolidación informa `archivos_procesados`.
+
+### Notas de actualización desde 2.0.0
+Versión menor: las secciones nuevas de `config.yaml` son opcionales.
+1. Agregar a `pipeline.tareas`, después de `validar`, las etapas `registrar_rechazos`
+   y `evaluar_calidad` (en ese orden), y opcionalmente las secciones `calidad`,
+   `alertas` y `orquestacion`.
+2. Aplicar las migraciones con un usuario con permisos de DDL (hospital: `V005` a `V007`;
+   ventas: `V003` a `V005`) y otorgar al usuario de servicio `SELECT, INSERT` sobre
+   `etl_rechazos` y `SELECT` sobre las vistas `vw_etl_*`.
+3. Retirar `dags/hospital_etl_dag.py` y montar `config/` y `pipelines/` en el scheduler
+   (ver `docs/despliegue.md`). Opcional: Variables de Airflow `ETL_SMTP_*` y
+   `ETL_ALERTA_DESTINATARIOS` para las alertas.
+4. Reconstruir la imagen: `docker build --build-arg ETL_VERSION=2.1.0 -t hospital-etl:2.1.0 .`
+
 ## [2.0.0] - 2026-11-25 - Fase 2: plantilla reutilizable
 
 ### Añadido

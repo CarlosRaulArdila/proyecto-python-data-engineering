@@ -61,7 +61,8 @@ def reiniciar_base(engine):
     with engine.begin() as conexion:
         conexion.execute(text(
             "DROP TABLE IF EXISTS public.hospital_registros, "
-            "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados"
+            "public.etl_auditoria, public.etl_migraciones, public.etl_archivos_procesados, "
+            "public.etl_rechazos CASCADE"
         ))
 
 
@@ -139,7 +140,7 @@ def test_migraciones_actualizan_una_base_de_la_version_anterior(engine):
             "WHERE table_name = 'hospital_registros'"
         )).scalars())
 
-    assert versiones == [1, 2, 3, 4]
+    assert versiones == [1, 2, 3, 4, 5, 6, 7]
     assert filas == 1
     assert {"fecha_creacion", "fecha_actualizacion"} <= columnas
 
@@ -253,6 +254,8 @@ def test_ingesta_incremental_por_lotes(engine, tmp_path):
 
     def modo_incremental_con_patrones(config):
         config["ingesta"] = {"modo": "incremental"}
+        # Los lotes de esta prueba son pequeños: sin mínimo de registros
+        config["calidad"] = {"max_porcentaje_rechazo": 30, "accion": "fallar"}
         config["fuentes"] = [
             {"nombre": "Hospital 1", "patron": "hospital_1*.csv"},
             {"nombre": "Hospital 2", "patron": "hospital_2*.csv"},
@@ -336,3 +339,124 @@ def test_si_la_carga_falla_los_archivos_no_se_registran(engine, tmp_path):
 
     assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 3
     assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12
+
+
+def test_umbral_de_calidad_detiene_la_carga(engine, tmp_path):
+
+    def umbral_estricto(config):
+        config["ingesta"] = {"modo": "incremental"}
+        config["calidad"] = {"max_porcentaje_rechazo": 10, "accion": "fallar"}
+
+    entorno, _ = crear_proyecto(tmp_path, umbral_estricto)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    # 3 de 15 rechazados = 20 % > 10 %: no debe cargarse nada
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 1
+
+    estado, mensaje = consultar(
+        engine, "SELECT estado, mensaje_error FROM etl_auditoria ORDER BY id DESC LIMIT 1"
+    )[0]
+
+    assert estado == "FALLIDO"
+    assert "20.0 %" in mensaje and "máximo permitido es 10 %" in mensaje
+    assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 0
+
+    # Los rechazos que provocaron el fallo quedan guardados para investigarlos
+    assert consultar(engine, "SELECT count(*) FROM etl_rechazos")[0][0] == 3
+    assert consultar(engine, "SELECT count(*) FROM etl_archivos_procesados")[0][0] == 0
+
+
+def test_umbral_en_modo_advertir_carga_y_anota(engine, tmp_path):
+
+    def solo_advertir(config):
+        config["calidad"] = {"max_porcentaje_rechazo": 10, "accion": "advertir"}
+
+    entorno, _ = crear_proyecto(tmp_path, solo_advertir)
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    resultado = ejecutar("src.ejecutar_pipeline", entorno)
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+    estado, advertencias = consultar(
+        engine, "SELECT estado, advertencias FROM etl_auditoria ORDER BY id DESC LIMIT 1"
+    )[0]
+
+    assert estado == "EXITOSO"
+    assert "Se rechazó el 20.0 %" in advertencias
+    assert consultar(engine, "SELECT count(*) FROM hospital_registros")[0][0] == 12
+
+
+def test_historial_de_rechazos(engine, proyecto_temporal):
+
+    entorno, _ = proyecto_temporal
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+
+    for _ in range(2):
+        resultado = ejecutar("src.ejecutar_pipeline", entorno)
+        assert resultado.returncode == 0, resultado.stdout + resultado.stderr
+
+    filas = consultar(engine, """
+        SELECT r.tipo, r.motivo, r.fuente, r.registro->>'numero_historia'
+        FROM etl_rechazos r
+        WHERE r.run_id = (SELECT run_id FROM etl_auditoria ORDER BY id DESC LIMIT 1)
+        ORDER BY 4
+    """)
+
+    assert [tuple(f) for f in filas] == [
+        ("incompleto", "Campos obligatorios vacíos: edad", "Hospital 2", "002003"),
+        ("incompleto", "Campos obligatorios vacíos: tecnica_anestesica", "Hospital 2", "002004"),
+        ("duplicado", "Registro duplicado exacto", "Hospital 3", "003004"),
+    ]
+
+    # Cada ejecución conserva su propio historial (no se sobrescribe)
+    por_ejecucion = consultar(
+        engine, "SELECT run_id, count(*) FROM etl_rechazos GROUP BY run_id"
+    )
+    assert len(por_ejecucion) == 2
+    assert all(cantidad == 3 for _, cantidad in por_ejecucion)
+
+    # El registro original completo se conserva (el vacío queda como null)
+    registro = consultar(
+        engine,
+        "SELECT registro FROM etl_rechazos WHERE registro->>'numero_historia' = '002003' LIMIT 1",
+    )[0][0]
+
+    assert registro["edad"] is None
+    assert registro["especialidad"] == "Traumatologia"
+
+
+def test_vistas_de_operacion_y_tablero(engine, proyecto_temporal, tmp_path):
+
+    entorno, raw = proyecto_temporal
+
+    reiniciar_base(engine)
+    assert ejecutar("src.migrar").returncode == 0
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 0
+
+    (raw / "hospital_2.csv").rename(raw / "oculto.tmp")
+    assert ejecutar("src.ejecutar_pipeline", entorno).returncode == 1
+
+    salud, ejecuciones_7d, fallidas_7d = consultar(
+        engine, "SELECT salud, ejecuciones_7d, fallidas_7d FROM vw_etl_salud"
+    )[0]
+    assert (salud, ejecuciones_7d, fallidas_7d) == ("FALLANDO", 2, 1)
+
+    dia = consultar(
+        engine, "SELECT ejecuciones, exitosas, fallidas, porcentaje_rechazo "
+        "FROM vw_etl_calidad_diaria"
+    )[0]
+    assert (dia[0], dia[1], dia[2], float(dia[3])) == (2, 1, 1, 20.0)
+
+    linaje = consultar(engine, "SELECT count(*) FROM vw_etl_linaje")[0][0]
+    assert linaje == 3
+
+    salida = tmp_path / "tablero.html"
+    resultado = ejecutar("src.tablero", {**entorno, "ETL_TABLERO_SALIDA": str(salida)})
+    assert resultado.returncode == 0, resultado.stdout + resultado.stderr

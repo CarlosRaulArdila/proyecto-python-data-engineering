@@ -5,7 +5,7 @@
 
 proyecto:
   nombre: "proyecto_python_data_engineering"
-  version: "2.0.0"
+  version: "2.1.0"
   entorno: "desarrollo"
 
 
@@ -137,6 +137,73 @@ reglas:
 
 
 # ============================================================
+# UMBRALES DE CALIDAD
+# ------------------------------------------------------------
+# Se evalúan después de validar y ANTES de cargar.
+#   max_porcentaje_rechazo:  % máximo de rechazados sobre los extraídos
+#   min_registros_extraidos: mínimo de registros esperados por ejecución
+#   accion: fallar   -> no carga nada; la ejecución queda FALLIDA
+#           advertir -> carga y anota la advertencia en la auditoría
+# Si no hubo archivos nuevos (ingesta incremental) no se evalúan.
+# ============================================================
+
+calidad:
+  max_porcentaje_rechazo: 30
+  min_registros_extraidos: 10
+  accion: "fallar"
+
+
+# ============================================================
+# ALERTAS
+# ------------------------------------------------------------
+# notificar_en: estados que generan alerta
+#   FALLIDO, PARCIAL, ADVERTENCIA (= EXITOSO con advertencias), EXITOSO
+# canales:
+#   email:   SMTP. Variables de entorno (o .env): ETL_SMTP_HOST,
+#            ETL_SMTP_PUERTO, ETL_SMTP_USUARIO, ETL_SMTP_CLAVE,
+#            ETL_SMTP_REMITENTE (opcional) y los destinatarios.
+#   webhook: Slack, Teams o genérico (JSON). La URL va en la
+#            variable indicada en url_env.
+# Los secretos NUNCA se escriben en este archivo.
+# Probar la configuración:  python -m src.alertas --prueba
+# ============================================================
+
+alertas:
+  notificar_en: ["FALLIDO", "PARCIAL", "ADVERTENCIA"]
+  canales:
+    - tipo: "email"
+      destinatarios_env: "ETL_ALERTA_DESTINATARIOS"
+
+    # - tipo: "webhook"
+    #   formato: "slack"            # slack | teams | generico
+    #   url_env: "ETL_ALERTA_WEBHOOK_URL"
+
+
+# ============================================================
+# ORQUESTACIÓN (Airflow)
+# ------------------------------------------------------------
+# La fábrica de DAG (dags/fabrica_pipelines_etl.py) crea un DAG
+# por pipeline a partir de esta sección.
+#   horario: expresión cron (minuto hora día mes día_semana)
+#            o null para ejecutar solo de forma manual.
+# Cambiar el horario no requiere reconstruir la imagen: Airflow
+# lo toma al releer este archivo. Otros cambios de config.yaml
+# sí requieren reconstruirla (la imagen lleva su propia copia).
+# ============================================================
+
+orquestacion:
+  activo: true
+  dag_id: "hospital_etl_pipeline"
+  horario: "0 6 * * *"            # todos los días a las 6:00
+  zona_horaria: "America/Bogota"
+  reintentos_migraciones: 2
+  minutos_entre_reintentos: 5
+  tiempo_maximo_minutos: 15
+  conexion_airflow: "hospital_dw_etl"
+  etiquetas: ["hospital"]
+
+
+# ============================================================
 # RUTAS DEL PROYECTO
 # ============================================================
 
@@ -197,6 +264,17 @@ pipeline:
       modulo: "src.validar_reglas"
       funcion: "ejecutar_validacion"
 
+    # Guarda los rechazos en la base (antes de los umbrales, para que
+    # queden registrados aunque un umbral detenga la carga)
+    - nombre: "registrar_rechazos"
+      modulo: "src.rechazos"
+      funcion: "registrar_rechazos"
+
+    # Umbrales de calidad (sección 'calidad'): va antes de la carga
+    - nombre: "evaluar_calidad"
+      modulo: "src.calidad"
+      funcion: "evaluar_calidad"
+
     - nombre: "cargar_incremental"
       modulo: "src.cargar_incremental"
       funcion: "ejecutar_carga_incremental"
@@ -221,6 +299,7 @@ base_datos:
   tabla_destino: "hospital_registros"
   tabla_auditoria: "etl_auditoria"
   tabla_archivos: "etl_archivos_procesados"
+  tabla_rechazos: "etl_rechazos"
 
   # El UPSERT se genera desde el esquema y pipeline.clave_negocio:
   # inserta todas las columnas del esquema y, si la clave ya existe,

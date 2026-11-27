@@ -24,6 +24,9 @@ Entre sus configuraciones se encuentran:
 | `ingesta` | `modo`: `completa` (todos los archivos en cada ejecución) o `incremental` (solo archivos no cargados antes, por hash SHA-256). |
 | `esquema` | Contrato de datos: columnas en orden, `tipo` (texto, entero, decimal, fecha, booleano), `obligatoria`, `derivada`, `longitud_max` y `descripcion`. |
 | `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
+| `calidad` | Umbrales: `max_porcentaje_rechazo` (0-100), `min_registros_extraidos` y `accion` (`fallar`: no carga; `advertir`: carga y anota en `etl_auditoria.advertencias`). |
+| `alertas` | `notificar_en` (estados que generan alerta) y `canales`: `email` (`destinatarios` o `destinatarios_env`) y `webhook` (`formato`, `url_env`). Los secretos van en variables de entorno. |
+| `orquestacion` | Para la fábrica de DAG de Airflow: `activo`, `dag_id`, `horario` (cron o null), `zona_horaria`, `reintentos_migraciones`, `minutos_entre_reintentos`, `tiempo_maximo_minutos`, `conexion_airflow`, `etiquetas`. |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
 | `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
 | `pipeline.id` | Identificador del pipeline en la auditoría. |
@@ -31,7 +34,7 @@ Entre sus configuraciones se encuentran:
 | `pipeline.clave_negocio` | Columnas que identifican un registro; deben coincidir con el índice único de la tabla destino. |
 | `pipeline.tareas` | Etapas en orden: `nombre`, `modulo` y `funcion`. |
 | `pipeline.detener_si_falla` | `true`: se detiene en el primer fallo (FALLIDO). `false`: continúa y termina como PARCIAL. |
-| `base_datos` | Esquema, tabla destino, tabla de auditoría, `tabla_archivos` (linaje) y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
+| `base_datos` | Esquema, tabla destino, tabla de auditoría, `tabla_archivos` (linaje), `tabla_rechazos` (historial de rechazos) y, opcionalmente, `columnas_actualizables` y `columna_actualizacion` del UPSERT. |
 | `migraciones` | `directorio` con las migraciones del proyecto (por defecto `sql/migraciones`). |
 | `logging` | Archivo, nivel, rotación y formato (incluye `run_id`). |
 
@@ -76,6 +79,9 @@ Variables adicionales:
 | `ETL_IMAGE_TAG` | Etiqueta de la imagen construida por `docker-compose.yml`. |
 | `ETL_PYTHON` | Intérprete que usa `ejecutar_pipeline.bat`. |
 | `RUN_INTEGRATION_TESTS` | `1` para ejecutar las pruebas de integración. |
+| `ETL_SMTP_HOST`, `ETL_SMTP_PUERTO`, `ETL_SMTP_USUARIO`, `ETL_SMTP_CLAVE`, `ETL_SMTP_REMITENTE` | Servidor de correo para las alertas. |
+| `ETL_ALERTA_DESTINATARIOS` | Destinatarios de las alertas, separados por coma. |
+| `ETL_ALERTA_WEBHOOK_URL` | URL del webhook (Slack, Teams...) si se usa ese canal. |
 
 ## 3. Conexión de Airflow
 
@@ -117,7 +123,7 @@ El archivo `.env` no debe publicarse ni compartirse.
 
 El proyecto utiliza `Dockerfile` para construir la imagen:
 
-`hospital-etl:2.0.0` (la versión se pasa con `--build-arg ETL_VERSION`)
+`hospital-etl:2.1.0` (la versión se pasa con `--build-arg ETL_VERSION`)
 
 Airflow ejecuta esta imagen mediante `DockerOperator`.
 
@@ -153,4 +159,4 @@ No incluir datos reales de pacientes en ejemplos, pruebas o documentación.
 ## 9. Estado
 
 Documento elaborado a partir de la configuración del proyecto
-hospitalario, versión 2.0.0.
+hospitalario, versión 2.1.0.

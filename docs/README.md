@@ -43,7 +43,10 @@ Plantilla modular y reutilizable para construir pipelines de Ingeniería de Dato
   y UPSERT declarados en `config.yaml`; ingesta incremental con linaje; un
   esquema de PostgreSQL por proyecto y un segundo pipeline de ejemplo (ventas)
   creado solo con configuración. Ver [Nuevo pipeline](nuevo_pipeline.md).
+- **2.1.0 (Fase 3 - operación autónoma):** umbrales de calidad que detienen la carga,
+  historial de rechazos en la base, alertas por correo y webhook, fábrica de DAG con
+  horarios por pipeline, vistas de operación para BI y tablero HTML (`python -m src.tablero`).
 
 ---
 
-Documentación: versión 2.0.0
+Documentación: versión 2.1.0

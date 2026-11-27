@@ -29,7 +29,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src import auditoria
+from src import alertas, auditoria
 from src.conexion_db import cerrar_engine
 from src.configuracion import CONFIG
 from src.registro_logs import configurar_logging
@@ -142,6 +142,8 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
 
     metricas = dict.fromkeys(METRICAS, 0)
     errores: list[str] = []
+    advertencias: list[str] = []
+    detalle: dict = {}  # todas las métricas devueltas por las etapas (último valor)
     id_ejecucion = None
     estado = auditoria.ESTADO_FALLIDO
 
@@ -162,6 +164,9 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
             "id_ejecucion": id_ejecucion,
             "pipeline_id": contexto["pipeline_id"],
             "errores": errores,
+            "advertencias": advertencias,
+            "metricas": metricas,
+            "detalle": detalle,
         }
 
         if tareas is None:
@@ -184,6 +189,7 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
                 continue
 
             acumular_metricas(metricas, resultado)
+            detalle.update(resultado or {})
 
             logger.info(
                 "Tarea completada: %s | Duración: %.2f s | Métricas: %s",
@@ -213,6 +219,7 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
 
     duracion_total = time.perf_counter() - inicio
     mensaje_error = " | ".join(errores) or None
+    texto_advertencias = " | ".join(advertencias) or None
 
     if id_ejecucion is not None:
         try:
@@ -221,6 +228,7 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
                 estado=estado,
                 duracion_segundos=duracion_total,
                 mensaje_error=mensaje_error,
+                advertencias=texto_advertencias,
                 **metricas,
             )
             logger.info("Auditoría cerrada | ID: %s | Estado: %s", id_ejecucion, estado)
@@ -234,6 +242,24 @@ def ejecutar_pipeline(tareas: list[Tarea] | None = None) -> int:
         estado,
         duracion_total,
         metricas,
+    )
+
+    if advertencias:
+        logger.warning("Advertencias de la ejecución: %s", texto_advertencias)
+
+    # Alertas: nunca alteran el estado ni el código de salida
+    alertas.notificar(
+        {
+            **contexto,
+            "estado": estado,
+            "run_id": run_id,
+            "id_ejecucion": id_ejecucion,
+            "duracion_segundos": duracion_total,
+            "metricas": metricas,
+            "mensaje_error": mensaje_error,
+            "advertencias": texto_advertencias,
+            "archivo_log": str(ruta_log),
+        }
     )
 
     cerrar_engine()

@@ -11,7 +11,7 @@ Este documento describe cómo ejecutar, supervisar y verificar el pipeline de In
 - Tareas: aplicar_migraciones >> ejecutar_pipeline_etl
 - Orquestador: Apache Airflow
 - Ejecutor: DockerOperator
-- Imagen: hospital-etl:2.0.0
+- Imagen: hospital-etl:2.1.0
 - Base de datos: hospital_dw
 - Tabla de auditoría: public.etl_auditoria
 - Control de migraciones: public.etl_migraciones
@@ -81,6 +81,23 @@ Con ingesta.modo: incremental, un archivo cuyo hash ya está en esta tabla se
 omite en las siguientes ejecuciones. Para forzar su reproceso, elimine su fila
 de etl_archivos_procesados (procedimiento controlado).
 
+Tablero de operación (todos los pipelines en una página):
+
+python -m src.tablero                      # reportes/tablero_operacion.html
+python -m src.tablero --dias 30
+
+El usuario de la conexión necesita SELECT sobre las vistas vw_etl_* de cada
+esquema. Para Power BI u otras herramientas de BI, conéctese a esas vistas
+(no a las tablas internas):
+
+| Vista | Contenido |
+|---|---|
+| vw_etl_salud | Estado actual por pipeline: OK, ADVERTENCIA, FALLANDO o ATRASADO (más de 26 h sin éxito) |
+| vw_etl_ejecuciones | Historial con % de rechazo, archivos procesados, errores y advertencias |
+| vw_etl_calidad_diaria | Por día (zona horaria del pipeline): ejecuciones, fallidas, volumen, % de rechazo |
+| vw_etl_rechazos_resumen | Motivos de rechazo agrupados por tipo y fuente |
+| vw_etl_linaje | Archivos de origen de cada ejecución |
+
 ## 6. Interpretación de métricas
 Campo	Significado
 registros_extraidos	Registros obtenidos de las fuentes
@@ -102,6 +119,39 @@ Estados posibles:
 | PARCIAL | Con detener_si_falla: false, alguna etapa falló pero las demás se ejecutaron. Código de salida 1. |
 
 Si no es posible registrar el inicio en etl_auditoria (por ejemplo, la base de datos no está disponible), el pipeline no se ejecuta y termina con código 1.
+
+Umbrales de calidad (sección calidad de config.yaml):
+- Con accion: fallar, una ejecución que los supera termina FALLIDA sin cargar datos;
+  el motivo queda en mensaje_error (por ejemplo, "Se rechazó el 45.0 % ...").
+- Con accion: advertir, la ejecución termina EXITOSA y el motivo queda en la
+  columna advertencias.
+
+Ejecuciones con advertencias:
+
+SELECT id, fecha_inicio, pipeline_id, advertencias
+FROM public.etl_auditoria
+WHERE advertencias IS NOT NULL
+ORDER BY id DESC;
+
+Historial de rechazos (tabla etl_rechazos). Motivos más frecuentes de los últimos 7 días:
+
+SELECT tipo, motivo, fuente, count(*) AS registros
+FROM public.etl_rechazos
+WHERE fecha_registro > now() - interval '7 days'
+GROUP BY 1, 2, 3
+ORDER BY registros DESC;
+
+Registros rechazados de una ejecución concreta, con sus datos originales:
+
+SELECT tipo, motivo, registro
+FROM public.etl_rechazos
+WHERE run_id = '<run_id>';
+
+Alertas: al terminar, cada ejecución con estado incluido en alertas.notificar_en
+envía un aviso con el estado, las métricas, el error o las advertencias y las
+consultas SQL para investigar. Para probar los canales:
+
+python -m src.alertas --prueba
 
 Cada línea del log incluye el run_id, que coincide con la columna run_id de etl_auditoria.
 
@@ -153,4 +203,4 @@ Se editó una migración ya aplicada. Restaurar el archivo original y crear una 
 ## 10. Reutilización
 Para operar el pipeline en otro proyecto se deben actualizar el identificador del DAG, las conexiones, la configuración, las rutas, la imagen Docker y la tabla de destino.
 
-Versión documentada: 2.0.0
+Versión documentada: 2.1.0

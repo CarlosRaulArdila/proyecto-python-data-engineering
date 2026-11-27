@@ -94,6 +94,7 @@ def registrar_fin(
     operaciones_bd=0,
     duracion_segundos=0,
     mensaje_error=None,
+    advertencias=None,
 ):
     """Cierra la fila de la ejecución con su estado final y sus métricas."""
 
@@ -113,7 +114,8 @@ def registrar_fin(
             registros_rechazados = :registros_rechazados,
             operaciones_bd = :operaciones_bd,
             duracion_segundos = :duracion_segundos,
-            mensaje_error = :mensaje_error
+            mensaje_error = :mensaje_error,
+            advertencias = :advertencias
         WHERE id = :id_ejecucion;
     """)
 
@@ -129,6 +131,7 @@ def registrar_fin(
                 "operaciones_bd": operaciones_bd,
                 "duracion_segundos": round(float(duracion_segundos), 3),
                 "mensaje_error": mensaje_error,
+                "advertencias": advertencias,
             },
         )
 
