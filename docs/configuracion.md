@@ -26,6 +26,7 @@ Entre sus configuraciones se encuentran:
 | `reglas` | Reglas de negocio: `columna`, `tipo` (`rango`, `valores_permitidos`, `patron`), sus parámetros y el `mensaje` de rechazo. Se suman a las reglas automáticas del esquema. |
 | `calidad` | Umbrales: `max_porcentaje_rechazo` (0-100), `min_registros_extraidos` y `accion` (`fallar`: no carga; `advertir`: carga y anota en `etl_auditoria.advertencias`). |
 | `alertas` | `notificar_en` (estados que generan alerta) y `canales`: `email` (`destinatarios` o `destinatarios_env`) y `webhook` (`formato`, `url_env`). Los secretos van en variables de entorno. |
+| `orquestacion` | Para la fábrica de DAG de Airflow: `activo`, `dag_id`, `horario` (cron o null), `zona_horaria`, `reintentos_migraciones`, `minutos_entre_reintentos`, `tiempo_maximo_minutos`, `conexion_airflow`, `etiquetas`. |
 | `rutas` | Carpetas `raw`, `processed`, `rejected` y `logs` (relativas a la raíz o absolutas). |
 | `archivos` | Nombres de los archivos generados, incluido `conflictos_clave`. |
 | `pipeline.id` | Identificador del pipeline en la auditoría. |

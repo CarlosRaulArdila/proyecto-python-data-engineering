@@ -65,7 +65,24 @@ GRANT SELECT, INSERT ON mi_proyecto.etl_archivos_procesados TO etl_service;
 GRANT SELECT ON mi_proyecto.etl_migraciones TO etl_service;
 ```
 
-## 6. Pruebas
+## 6. Programarlo en Airflow
+
+Agregue la sección `orquestacion` a su `config.yaml`:
+
+```yaml
+orquestacion:
+  activo: true
+  horario: "0 7 * * *"          # cron, o null para ejecución manual
+  zona_horaria: "America/Bogota"
+  conexion_airflow: "hospital_dw_etl"
+  etiquetas: ["mi_proyecto"]
+```
+
+Reconstruya la imagen ETL. La fábrica de DAG creará `<pipeline.id>` en Airflow
+automáticamente (aparece pausado la primera vez). Las rutas de datos deben estar
+dentro de `data/` y `logs/`, y la carpeta `raw` debe existir en el equipo.
+
+## 7. Pruebas
 
 `tests/test_pipelines_ejemplo.py` valida automáticamente la configuración de
 cada carpeta de `pipelines/`. Para una prueba de extremo a extremo, use como

@@ -180,6 +180,30 @@ alertas:
 
 
 # ============================================================
+# ORQUESTACIÓN (Airflow)
+# ------------------------------------------------------------
+# La fábrica de DAG (dags/fabrica_pipelines_etl.py) crea un DAG
+# por pipeline a partir de esta sección.
+#   horario: expresión cron (minuto hora día mes día_semana)
+#            o null para ejecutar solo de forma manual.
+# Cambiar el horario no requiere reconstruir la imagen: Airflow
+# lo toma al releer este archivo. Otros cambios de config.yaml
+# sí requieren reconstruirla (la imagen lleva su propia copia).
+# ============================================================
+
+orquestacion:
+  activo: true
+  dag_id: "hospital_etl_pipeline"
+  horario: "0 6 * * *"            # todos los días a las 6:00
+  zona_horaria: "America/Bogota"
+  reintentos_migraciones: 2
+  minutos_entre_reintentos: 5
+  tiempo_maximo_minutos: 15
+  conexion_airflow: "hospital_dw_etl"
+  etiquetas: ["hospital"]
+
+
+# ============================================================
 # RUTAS DEL PROYECTO
 # ============================================================
 

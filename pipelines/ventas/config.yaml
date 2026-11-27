@@ -120,6 +120,15 @@ alertas:
       destinatarios_env: "ETL_ALERTA_DESTINATARIOS"
 
 
+# Orquestación en Airflow (DAG generado por la fábrica)
+orquestacion:
+  activo: true
+  horario: "30 6 * * *"           # todos los días a las 6:30
+  zona_horaria: "America/Bogota"
+  conexion_airflow: "hospital_dw_etl"
+  etiquetas: ["ventas"]
+
+
 rutas:
   raw: "data/ventas/raw"
   processed: "data/ventas/processed"

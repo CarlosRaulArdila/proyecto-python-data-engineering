@@ -61,11 +61,59 @@ El DAG principal es:
 
 hospital_etl_pipeline
 
-Tareas del DAG, en orden:
-1. aplicar_migraciones: ejecuta python -m src.migrar (idempotente).
-2. ejecutar_pipeline_etl: ejecuta python -m src.ejecutar_pipeline.
+Fábrica de DAG: Airflow crea automáticamente un DAG por cada pipeline
+(config/config.yaml y pipelines/<nombre>/config.yaml) a partir del archivo
+dags/fabrica_pipelines_etl.py. No hay que escribir DAG a mano.
 
-Ambas tienen 2 reintentos con 5 minutos de espera.
+| DAG | Configuración | Horario |
+|---|---|---|
+| hospital_etl_pipeline | config/config.yaml | 0 6 * * * (6:00) |
+| ventas_etl_pipeline | pipelines/ventas/config.yaml | 30 6 * * * (6:30) |
+
+El horario y demás parámetros se definen en la sección orquestacion de cada
+config.yaml. Los DAG nuevos aparecen pausados: actívelos en la interfaz o con
+airflow dags unpause <dag_id>.
+
+Tareas de cada DAG, en orden:
+1. aplicar_migraciones: python -m src.migrar (2 reintentos con 5 minutos de espera).
+2. ejecutar_pipeline_etl: python -m src.ejecutar_pipeline (sin reintentos automáticos:
+   un FALLIDO ya queda auditado y alertado por el pipeline).
+
+Montajes que necesita el scheduler (docker-compose.yaml de Airflow), en solo lectura:
+
+    - /mnt/c/Users/User/Documents/proyecto_python_data_engineering/dags:/opt/airflow/dags/proyecto_python_data_engineering
+    - /mnt/c/Users/User/Documents/proyecto_python_data_engineering/config:/opt/airflow/proyecto_etl/config:ro
+    - /mnt/c/Users/User/Documents/proyecto_python_data_engineering/pipelines:/opt/airflow/proyecto_etl/pipelines:ro
+
+Las rutas de datos de cada pipeline (rutas en config.yaml) deben estar dentro de
+data/ y logs/ del proyecto: el contenedor ETL monta esas dos carpetas y cada
+carpeta raw en solo lectura.
+
+Variables de Airflow para las alertas por correo (opcionales):
+
+| Variable | Ejemplo |
+|---|---|
+| ETL_SMTP_HOST | smtp.gmail.com |
+| ETL_SMTP_PUERTO | 587 |
+| ETL_SMTP_USUARIO | cuenta@gmail.com |
+| ETL_SMTP_PASSWORD | contraseña de aplicación (Airflow la oculta) |
+| ETL_ALERTA_DESTINATARIOS | persona1@empresa.com,persona2@empresa.com |
+
+Si una tarea falla por un motivo que el pipeline no puede reportar (imagen
+inexistente, contenedor que no arranca, tiempo agotado, migraciones), Airflow
+envía un correo "[ETL] FALLO EN AIRFLOW" con el enlace al log.
+
+Variables de entorno opcionales del scheduler:
+
+| Variable | Valor por defecto |
+|---|---|
+| ETL_CONFIGS_DIR | /opt/airflow/proyecto_etl |
+| ETL_PROJECT_PATH | /mnt/c/Users/User/Documents/proyecto_python_data_engineering |
+| ETL_IMAGE | hospital-etl:2.1.0 |
+| ETL_DOCKER_NETWORK | airflow-docker_default |
+
+Cambiar el horario de un pipeline no requiere reconstruir la imagen. Cualquier
+otro cambio de config.yaml, del código o de las migraciones sí la requiere.
 
 Permisos: aplicar una migración nueva requiere permisos de DDL (CREATE/ALTER).
 Si la conexión hospital_dw_etl usa un usuario de servicio con permisos limitados,

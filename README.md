@@ -89,7 +89,8 @@ proyecto_python_data_engineering/
 │   └── ci.yml
 │
 ├── dags/
-│   └── hospital_etl_dag.py
+│   ├── fabrica_pipelines_etl.py   # DAG factory: one DAG per pipeline config
+│   └── etl_fabrica_config.py      # factory logic (no Airflow imports, unit-tested)
 │
 ├── data/
 │   ├── raw/

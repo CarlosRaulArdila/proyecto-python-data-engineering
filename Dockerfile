@@ -1,16 +1,12 @@
 FROM python:3.12-slim
 
-ARG ETL_VERSION=2.0.0
-
-LABEL org.opencontainers.image.title="hospital-etl" \
-      org.opencontainers.image.version="${ETL_VERSION}" \
-      org.opencontainers.image.description="Motor ETL modular: consolidación, limpieza, validación y carga incremental en PostgreSQL"
-
+# Configuracion de Python y pip.
+# PIP_DEFAULT_TIMEOUT / PIP_RETRIES: tolerancia a redes lentas o inestables.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    ETL_PIPELINE_VERSION=${ETL_VERSION}
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10
 
 WORKDIR /app
 
@@ -23,7 +19,20 @@ RUN apt-get update \
 
 COPY requirements.txt .
 
-RUN pip install -r requirements.txt
+# La cache de BuildKit conserva las descargas entre construcciones
+# (no queda dentro de la imagen).
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
+# La version se declara DESPUES de instalar dependencias: cambiarla no
+# invalida las capas anteriores (no se vuelve a descargar nada).
+ARG ETL_VERSION=2.1.0
+
+LABEL org.opencontainers.image.title="hospital-etl" \
+      org.opencontainers.image.version="${ETL_VERSION}" \
+      org.opencontainers.image.description="Motor ETL modular configurable por YAML"
+
+ENV ETL_PIPELINE_VERSION=${ETL_VERSION}
 
 COPY --chown=etl:etl src/ ./src/
 COPY --chown=etl:etl config/ ./config/

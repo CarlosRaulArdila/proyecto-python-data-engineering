@@ -5,6 +5,9 @@ y versionado semántico.
 
 ## [Sin publicar] - Fase 3: operación autónoma
 
+### Eliminado
+- `dags/hospital_etl_dag.py`: reemplazado por la fábrica (mismo `dag_id`, conserva el historial).
+
 ### Añadido
 - **Umbrales de calidad** (sección `calidad` y módulo `src/calidad.py`):
   `max_porcentaje_rechazo`, `min_registros_extraidos` y `accion` (`fallar` o `advertir`).
@@ -28,6 +31,21 @@ y versionado semántico.
     la URL del webhook); nunca en el YAML.
   - Una alerta que no se puede enviar nunca hace fallar el pipeline.
   - `python -m src.alertas --prueba` envía una alerta de ejemplo.
+- **Fábrica de DAG** (`dags/fabrica_pipelines_etl.py` y `dags/etl_fabrica_config.py`):
+  un DAG por cada `config/config.yaml` y `pipelines/*/config.yaml`, sin escribir código.
+  - Sección `orquestacion` por pipeline: `horario` (cron o null), `zona_horaria`,
+    `reintentos_migraciones`, `tiempo_maximo_minutos`, `conexion_airflow`, `etiquetas`, `activo`.
+  - Hospital programado a las 6:00 y ventas a las 6:30 (America/Bogota).
+  - Las variables de correo llegan al contenedor desde Variables de Airflow
+    (`ETL_SMTP_*`, `ETL_ALERTA_DESTINATARIOS`); si no existen, no se envía correo.
+  - Alerta de Airflow cuando una tarea falla por algo que el pipeline no pudo reportar
+    (imagen inexistente, contenedor que no arranca, tiempo agotado, migraciones). Los
+    FALLIDO del pipeline no se duplican: ya los avisa el propio pipeline.
+  - La tarea del pipeline no se reintenta automáticamente (las migraciones, sí).
+  - Validado contra Airflow 2.10.3 y apache-airflow-providers-docker 3.14.0.
+- Dockerfile: la versión se declara después de instalar las dependencias (cambiarla ya no
+  vuelve a descargar nada), caché de descargas de pip con BuildKit y tolerancia a redes
+  lentas (`PIP_DEFAULT_TIMEOUT=120`, `PIP_RETRIES=10`).
 - Prueba que importa cada módulo de `src/` en un proceso limpio (detecta importaciones
   circulares).
 - Las etapas reciben en el contexto las métricas acumuladas (`metricas`), el detalle
